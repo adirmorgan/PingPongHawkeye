@@ -58,3 +58,6 @@ def browse_npy_File(npy_path: str):
         show_frame(index)
 
     cv2.destroyAllWindows()
+
+if __name__ == '__main__':
+    browse_npy_File("C:\\Users\\elad2\\Downloads\\filtered_frames.npy")

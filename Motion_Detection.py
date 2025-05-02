@@ -3,9 +3,9 @@ import numpy as np
 
 
 def steps_differences_motion_detection(
-    video_path: str,
-    k: int = 5,
-    threshold: int = 25
+        video_path: str,
+        k: int = 5,
+        threshold: int = 25
 ):
     """
     Run k-step difference motion detection on a single video.
@@ -44,10 +44,11 @@ def steps_differences_motion_detection(
     cap.release()
     cv2.destroyAllWindows()
 
+
 def background_model_motion_detection(
-    video_path: str,
-    learning_rate: float = 0.01,
-    threshold: int = 30
+        video_path: str,
+        learning_rate: float = 0.01,
+        threshold: int = 30
 ):
     """
     Run background-model motion detection on a single video.
@@ -66,41 +67,44 @@ def background_model_motion_detection(
         ret, frame = cap.read()
         if not ret:
             break
-            
-    # Initialize or update 3-channel background
-    if background is None:
-        background = frame.astype("float")
-    else:
-        cv2.accumulateWeighted(frame, background, learning_rate)
 
-    # Convert running background to uint8
-    bg_frame = cv2.convertScaleAbs(background)
+        # Initialize or update 3-channel background
+        if background is None:
+            background = frame.astype("float")
+        else:
+            cv2.accumulateWeighted(frame, background, learning_rate)
 
-    # Compute per-channel absolute difference
-    diff = cv2.absdiff(frame, bg_frame)
+        # Convert running background to uint8
+        bg_frame = cv2.convertScaleAbs(background)
 
-    # Threshold each channel and combine
-    b, g, r = cv2.split(diff)
-    _, mb = cv2.threshold(b, threshold, 255, cv2.THRESH_BINARY)
-    _, mg = cv2.threshold(g, threshold, 255, cv2.THRESH_BINARY)
-    _, mr = cv2.threshold(r, threshold, 255, cv2.THRESH_BINARY)
-    motion_mask = cv2.bitwise_or(cv2.bitwise_or(mb, mg), mr)
+        # Compute per-channel absolute difference
+        diff = cv2.absdiff(frame, bg_frame)
 
-    cv2.imshow(window_name, motion_mask)
-    if cv2.waitKey(30) & 0xFF == ord('q'):
-        break
+        # Threshold each channel and combine
+        b, g, r = cv2.split(diff)
+        _, mb = cv2.threshold(b, threshold, 255, cv2.THRESH_BINARY)
+        _, mg = cv2.threshold(g, threshold, 255, cv2.THRESH_BINARY)
+        _, mr = cv2.threshold(r, threshold, 255, cv2.THRESH_BINARY)
+        motion_mask = cv2.bitwise_or(cv2.bitwise_or(mb, mg), mr)
 
-cap.release()
-cv2.destroyAllWindows()
+        cv2.imshow(window_name, motion_mask)
+        if cv2.waitKey(30) & 0xFF == ord('q'):
+            break
+
+
+    cap.release()
+    cv2.destroyAllWindows()
+
 
 def main():
-    method = input("Choose your motion detection method:\n [1] steps differences\n [2] background image \n Your choice: ")
+    method = input(
+        "Choose your motion detection method:\n [1] steps differences\n [2] background image \n Your choice: ")
     if method == "1":
         steps_differences_motion_detection(
-        video_path=r'C:\Users\Bar\Desktop\Itay\Hawkeye\videos\Shapes1.mp4',
-        k=5,
-        threshold=25
-    )
+            video_path=r'C:\Users\Bar\Desktop\Itay\Hawkeye\videos\Shapes1.mp4',
+            k=5,
+            threshold=25
+        )
     if method == "2":
         background_model_motion_detection(
             video_path=r'C:\Users\Bar\Desktop\Itay\Hawkeye\videos\Shapes1.mp4',

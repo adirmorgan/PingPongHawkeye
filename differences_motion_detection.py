@@ -30,3 +30,10 @@ while True:
     if len(frame_buffer) < k:
         # buffer not fully filled: show blank or waiting frame
         motion_mask = np.zeros_like(gray)
+
+    else:
+        # compare current frame with the one k steps ago
+        kstep_diff = cv2.absdiff(frame_buffer[0], gray)
+        _, motion_mask = cv2.threshold(kstep_diff, thresh, 255, cv2.THRESH_BINARY)
+
+    cv2.imshow(window_name, motion_mask)

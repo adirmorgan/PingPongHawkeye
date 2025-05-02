@@ -86,6 +86,12 @@ def background_model_motion_detection(
     _, mr = cv2.threshold(r, threshold, 255, cv2.THRESH_BINARY)
     motion_mask = cv2.bitwise_or(cv2.bitwise_or(mb, mg), mr)
 
+    cv2.imshow(window_name, motion_mask)
+    if cv2.waitKey(30) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
 
 def main():
     method = input("Choose your motion detection method:\n [1] steps differences\n [2] background image \n Your choice: ")

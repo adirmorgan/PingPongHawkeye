@@ -57,6 +57,10 @@ def background_model_motion_detection(
       learning_rate (float, optional): Alpha for cv2.accumulateWeighted. Defaults to 0.01.
       threshold (int, optional): Binary threshold for motion mask. Defaults to 30.
     """
+    cap = cv2.VideoCapture(video_path)
+    background = None
+    window_name = "Background Model Motion Detection"
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
 
 def main():

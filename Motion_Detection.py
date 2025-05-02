@@ -1,21 +1,26 @@
 import cv2
 import numpy as np
 
-def differences_method(
-    # --- Parameters ---
-    video_path = r'./Data/sim_data/Shapes1.mp4',
-    k = 5,           # number of frames back to compare
-    thresh = 25     # motion threshold
-    ):
 
-    # --- Setup ---
+def steps_differences_motion_detection(
+    video_path: str,
+    k: int = 5,
+    threshold: int = 25
+):
+    """
+    Run k-step difference motion detection on a single video.
+
+    Args:
+      video_path (str): Path to the input video file.
+      k (int, optional): Number of frames back to compare. Defaults to 5.
+      threshold (int, optional): Binary threshold for motion mask. Defaults to 25.
+    """
     cap = cv2.VideoCapture(video_path)
     frame_buffer = []
-
     window_name = f"{k}-Step Motion Detection"
+
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
-    # --- Main loop ---
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -27,24 +32,48 @@ def differences_method(
             frame_buffer.pop(0)
 
         if len(frame_buffer) < k:
-            # buffer not yet filled: show blank or waiting frame
             motion_mask = np.zeros_like(gray)
         else:
-            # compare current frame with the one k steps ago
             kstep_diff = cv2.absdiff(frame_buffer[0], gray)
-            _, motion_mask = cv2.threshold(kstep_diff, thresh, 255, cv2.THRESH_BINARY)
+            _, motion_mask = cv2.threshold(kstep_diff, threshold, 255, cv2.THRESH_BINARY)
 
         cv2.imshow(window_name, motion_mask)
-
         if cv2.waitKey(30) & 0xFF == ord('q'):
             break
 
-    # --- Cleanup ---
     cap.release()
     cv2.destroyAllWindows()
 
+def background_model_motion_detection(
+    video_path: str,
+    learning_rate: float = 0.01,
+    threshold: int = 30
+):
+    """
+    Run background-model motion detection on a single video.
+
+    Args:
+      video_path (str): Path to the input video file.
+      learning_rate (float, optional): Alpha for cv2.accumulateWeighted. Defaults to 0.01.
+      threshold (int, optional): Binary threshold for motion mask. Defaults to 30.
+    """
+
+
 def main():
-    differences_method()
+    method = input("Choose your motion detection method:\n [1] steps differences\n [2] background image \n Your choice: ")
+    if method == "1":
+        steps_differences_motion_detection(
+        video_path=r'C:\Users\Bar\Desktop\Itay\Hawkeye\videos\Shapes1.mp4',
+        k=5,
+        threshold=25
+    )
+    if method == "2":
+        background_model_motion_detection(
+            video_path=r'C:\Users\Bar\Desktop\Itay\Hawkeye\videos\Shapes1.mp4',
+            learning_rate=0.01,
+            threshold=30
+        )
+
 
 if __name__ == '__main__':
     main()

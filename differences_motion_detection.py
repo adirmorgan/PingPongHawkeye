@@ -22,3 +22,11 @@ while True:
         
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     frame_buffer.append(gray)
+
+    if len(frame_buffer) > k:
+        # keep the buffer with size k!
+        frame_buffer.pop(0)
+
+    if len(frame_buffer) < k:
+        # buffer not fully filled: show blank or waiting frame
+        motion_mask = np.zeros_like(gray)

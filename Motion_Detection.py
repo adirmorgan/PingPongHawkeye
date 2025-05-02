@@ -73,6 +73,19 @@ def background_model_motion_detection(
     else:
         cv2.accumulateWeighted(frame, background, learning_rate)
 
+    # Convert running background to uint8
+    bg_frame = cv2.convertScaleAbs(background)
+
+    # Compute per-channel absolute difference
+    diff = cv2.absdiff(frame, bg_frame)
+
+    # Threshold each channel and combine
+    b, g, r = cv2.split(diff)
+    _, mb = cv2.threshold(b, threshold, 255, cv2.THRESH_BINARY)
+    _, mg = cv2.threshold(g, threshold, 255, cv2.THRESH_BINARY)
+    _, mr = cv2.threshold(r, threshold, 255, cv2.THRESH_BINARY)
+    motion_mask = cv2.bitwise_or(cv2.bitwise_or(mb, mg), mr)
+
 
 def main():
     method = input("Choose your motion detection method:\n [1] steps differences\n [2] background image \n Your choice: ")

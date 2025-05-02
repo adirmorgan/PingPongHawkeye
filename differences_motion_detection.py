@@ -13,3 +13,9 @@ cap = cv2.VideoCapture(video_path)
 frame_buffer = []
 
 cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+
+# --- Main loop ---
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break

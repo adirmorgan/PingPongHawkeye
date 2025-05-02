@@ -62,6 +62,10 @@ def background_model_motion_detection(
     window_name = "Background Model Motion Detection"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
 
 def main():
     method = input("Choose your motion detection method:\n [1] steps differences\n [2] background image \n Your choice: ")

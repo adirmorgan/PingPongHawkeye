@@ -66,6 +66,13 @@ def background_model_motion_detection(
         ret, frame = cap.read()
         if not ret:
             break
+            
+    # Initialize or update 3-channel background
+    if background is None:
+        background = frame.astype("float")
+    else:
+        cv2.accumulateWeighted(frame, background, learning_rate)
+
 
 def main():
     method = input("Choose your motion detection method:\n [1] steps differences\n [2] background image \n Your choice: ")

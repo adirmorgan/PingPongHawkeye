@@ -60,4 +60,4 @@ def browse_npy_file(npy_path: str):
 
 
 if __name__ == '__main__':
-    browse_npy_File("C:\\Users\\elad2\\Downloads\\filtered_frames.npy")
+    browse_npy_file(".\\Data\\test_data\\test_vid.npy")

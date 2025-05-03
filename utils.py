@@ -1,13 +1,11 @@
 import cv2
 import numpy as np
 
-def browse_npy_File(npy_path: str):
+def browse_npy_file(npy_path: str):
     """
     Loads a saved NumPy array of frames and allows interactive browsing using OpenCV.
-
     Args:
         npy_path (str): Path to the .npy file containing the video frames.
-
     Controls:
         'a' or Left Arrow (←): Previous frame
         'd' or Right Arrow (→): Next frame

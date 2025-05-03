@@ -1,18 +1,9 @@
 import cv2
 import numpy as np
 from typing import Tuple
+import os, sys
 
-def browse_npy_file(npy_path: str):
-    """
-    Loads a saved NumPy array of frames and allows interactive browsing using OpenCV.
-    Args:
-        npy_path (str): Path to the .npy file containing the video frames.
-    Controls:
-        'a' or Left Arrow (←): Previous frame
-        'd' or Right Arrow (→): Next frame
-        'q': Quit
-    """
-
+def browse_npy_file(npy_path: str, window_name:str = 'Video'):
     try:
         frames_array = np.load(npy_path)
     except Exception as e:
@@ -40,9 +31,7 @@ def browse_npy_file(npy_path: str):
         show_frame(index)
 
     cv2.createTrackbar("Frame", window_name, 0, num_frames - 1, on_trackbar)
-
     show_frame(index)
-
     print("Controls:\n  ← / a = Previous\n  → / d = Next\n  q = Quit")
 
     while True:
@@ -59,14 +48,39 @@ def browse_npy_file(npy_path: str):
 
     cv2.destroyAllWindows()
 
+def load_video_to_array(video_path):
+    cap = cv2.VideoCapture(video_path)
+
+    if not cap.isOpened():
+        raise IOError(f"Cannot open video: {video_path}")
+
+    frames = []
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frames.append(frame)
+
+    cap.release()
+
+    # Convert list of frames to a 4D numpy array (num_frames, height, width, channels)
+    return np.array(frames)
+
+def save_video_as_array(vid_array, output_path):
+    if vid_array is not None:
+        frames_array = np.array(vid_array, dtype=np.uint8)
+        np.save(output_path, frames_array)
+        print(f"Saved {len(vid_array)} filtered frames to {output_path}")
+    else:
+        print("No frames were processed and saved.")
 
 
 def Save_Video_After_HSV_Mask_To_npy_File(
     video_path: str,
+    output_path: str,
     hsv_lower: Tuple[int, int, int],
     hsv_upper: Tuple[int, int, int],
     max_frames: int = 300,
-    output_path: str = ".\\Data\\test_data\\test_vid.npy",
     start_msec: int = 20500
 ):
     """
@@ -89,11 +103,15 @@ def Save_Video_After_HSV_Mask_To_npy_File(
     Outputs:
         Saves a NumPy array containing the filtered frames at the specified output path.
     """
-    cap = cv2.VideoCapture(video_path)
+
+    base_path = os.path.dirname(__file__)
+    full_path = os.path.join(base_path, video_path)
+
+    cap = cv2.VideoCapture(full_path)
     if not cap.isOpened():
         raise IOError(f"Cannot open video file: {video_path}")
 
-    cap.set(cv2.CAP_PROP_POS_MSEC, start_msec)
+    # cap.set(cv2.CAP_PROP_POS_MSEC, start_msec)
     frames = []
     count = 0
 
@@ -119,9 +137,13 @@ def Save_Video_After_HSV_Mask_To_npy_File(
 
 
 if __name__ == '__main__':
-    Save_Video_After_HSV_Mask_To_npy_File(".\\Data\\sim_data\\camera1.mp4",
-                                          (0, 0, 195), (179, 80, 255),
-                                          output_path = ".\\Data\\test_data\\test_processed_vid.npy")
+    # vid_array = load_video_to_array("Data/sim_data/camera1.mp4")
+    # print("loaded video to np array")
+    #
+    # output_path = "Data/test_data/test_processed_vid.npy"
+    # save_video_as_array(vid_array, output_path)
+    # print("saved np array")
 
-    browse_npy_file(".\\Data\\test_data\\test_processed_vid.npy")
+
+    browse_npy_file("Data/test_data/test_processed_vid.npy")
 

@@ -1,7 +1,5 @@
 import cv2
 import numpy as np
-from typing import Tuple
-import os, sys
 
 def browse_npy_file(npy_path: str, window_name:str = 'Video'):
     try:
@@ -76,13 +74,12 @@ def save_video_as_array(vid_array, output_path):
 
 
 if __name__ == '__main__':
-    # vid_array = load_video_to_array("Data/sim_data/camera1.mp4")
-    # print("loaded video to np array")
-    #
-    # output_path = "Data/test_data/test_processed_vid.npy"
-    # save_video_as_array(vid_array, output_path)
-    # print("saved np array")
+    vid_array = load_video_to_array("Data/sim_data/camera1.mp4")
+    print("loaded video to np array")
 
+    output_path = "Data/test_data/test_processed_vid.npy"
+    save_video_as_array(vid_array, output_path)
+    print("saved np array")
 
     browse_npy_file("Data/test_data/test_processed_vid.npy")
 

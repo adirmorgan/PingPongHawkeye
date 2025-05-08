@@ -133,7 +133,7 @@ def browse_frames_with_detection(
 
 if __name__ == '__main__':
     browse_frames_with_detection(
-        npy_path="C:\\Users\\elad2\\Downloads\\filtered_frames.npy",
+        npy_path="C:\\Users\\elad2\\Downloads\\tryinnn.npy",
         roi_bounds=(320, 900, 200, 470),
         min_size=7,
         max_size=20,

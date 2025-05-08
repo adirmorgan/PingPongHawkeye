@@ -2,13 +2,16 @@ import cv2
 import numpy as np
 
 
+import cv2
+import numpy as np
+
 def steps_differences_motion_detection(
         video_path: str,
         k: int = 5,
         threshold: int = 25
 ):
     """
-    Run k-step difference motion detection on a single video.
+    Run k-step difference motion detection on a single video using RGB vector norm.
 
     Args:
       video_path (str): Path to the input video file.
@@ -17,7 +20,7 @@ def steps_differences_motion_detection(
     """
     cap = cv2.VideoCapture(video_path)
     frame_buffer = []
-    window_name = f"{k}-Step Motion Detection"
+    window_name = f"{k}-Step Motion Detection (RGB Norm)"
 
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
@@ -26,16 +29,16 @@ def steps_differences_motion_detection(
         if not ret:
             break
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frame_buffer.append(gray)
+        frame_buffer.append(frame.copy())
         if len(frame_buffer) > k:
             frame_buffer.pop(0)
 
         if len(frame_buffer) < k:
-            motion_mask = np.zeros_like(gray)
+            motion_mask = np.zeros(frame.shape[:2], dtype=np.uint8)
         else:
-            kstep_diff = cv2.absdiff(frame_buffer[0], gray)
-            _, motion_mask = cv2.threshold(kstep_diff, threshold, 255, cv2.THRESH_BINARY)
+            diff = frame.astype(np.float32) - frame_buffer[0].astype(np.float32)
+            norm = np.linalg.norm(diff, axis=2)
+            motion_mask = np.where(norm > threshold, 255, 0).astype(np.uint8)
 
         cv2.imshow(window_name, motion_mask)
         if cv2.waitKey(30) & 0xFF == ord('q'):
@@ -43,6 +46,7 @@ def steps_differences_motion_detection(
 
     cap.release()
     cv2.destroyAllWindows()
+
 
 
 def background_model_motion_detection(
@@ -101,13 +105,13 @@ def main():
         "Choose your motion detection method:\n [1] steps differences\n [2] background image \n Your choice: ")
     if method == "1":
         steps_differences_motion_detection(
-            video_path=r'C:\Users\Bar\Desktop\Itay\Hawkeye\videos\Shapes1.mp4',
+            video_path=r'C:\Users\itays\PythonProjects\PingPongHawkeye\Data\sim_data\Shapes1.mp4',
             k=5,
             threshold=25
         )
     if method == "2":
         background_model_motion_detection(
-            video_path=r'C:\Users\Bar\Desktop\Itay\Hawkeye\videos\Shapes1.mp4',
+            video_path=r'C:\Users\itays\PythonProjects\PingPongHawkeye\Data\sim_data\Shapes1.mp4',
             learning_rate=0.01,
             threshold=30
         )

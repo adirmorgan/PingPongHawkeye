@@ -73,13 +73,46 @@ def save_video_as_array(vid_array, output_path):
         print("No frames were processed and saved.")
 
 
+import cv2
+import numpy as np
+import os
+
+def stream_and_save_video_as_array(video_path, output_path):
+    cap = cv2.VideoCapture(video_path)
+
+    if not cap.isOpened():
+        raise IOError(f"Cannot open video: {video_path}")
+
+    frame_list = []
+    frame_count = 0
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        frame_list.append(frame.astype(np.uint8))
+        frame_count += 1
+
+    cap.release()
+
+    frames_array = np.array(frame_list, dtype=np.uint8)
+    np.save(output_path, frames_array)
+    print(f"Saved {frame_count} frames to {output_path}")
+
+
+
 if __name__ == '__main__':
-    vid_array = load_video_to_array("Data/sim_data/camera1.mp4")
-    print("loaded video to np array")
+    #vid_array = load_video_to_array("C:\\Users\\elad2\\Downloads\\pingpong_720p60_final.mp4")
+    #print("loaded video to np array")
 
-    output_path = "Data/test_data/test_processed_vid.npy"
-    save_video_as_array(vid_array, output_path)
-    print("saved np array")
+    #output_path ='C:\\Users\\elad2\\Downloads\\test_processed_vid.npy'
+            #output_path = "Data/test_data/test_processed_vid.npy"
+    #save_video_as_array(vid_array, output_path)
+    #print("saved np array")
 
-    browse_npy_file("Data/test_data/test_processed_vid.npy")
+    stream_and_save_video_as_array("C:\\Users\\elad2\\Downloads\\pingpong_720p60_final.mp4",
+                                   'C:\\Users\\elad2\\Downloads\\test_processed_vid.npy')
+
+    browse_npy_file('C:\\Users\\elad2\\Downloads\\test_processed_vid.npy')
 

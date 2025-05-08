@@ -84,16 +84,4 @@ def Save_Video_To_npy_File_With_Or_without_HSV_Mask(
 
 
 if __name__ == '__main__':
-
-    #example for config JSON:
-    # {
-    #     "video_path": "example_video.mp4",
-    #     "hsv_lower": [30, 50, 50],
-    #     "hsv_upper": [90, 255, 255],
-    #     "max_frames": 200,
-    #     "output_path": "output_frames.npy",
-    #     "start_msec": 15000,
-    #     "apply_mask": true
-    # }
-
-    Save_Video_To_npy_File_With_Or_without_HSV_Mask("C:\\Users\\elad2\\Downloads\\pingpong_720p60_final.mp4", (0, 0, 195), (179, 80, 255),output_path = "C:\\Users\\elad2\\Downloads\\tryinnn_no_mask.npy",apply_mask=False)
+    Save_Video_To_npy_File_With_Or_without_HSV_Mask(use_config=True, config_path="C:\\Users\\elad2\\Downloads\\config.json")

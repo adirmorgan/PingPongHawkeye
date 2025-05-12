@@ -11,7 +11,7 @@ def create_config_json_file_for_Save_npy_file(
         max_frames: int = 300,
         start_msec: int = 20500,
         apply_mask: bool = True,
-        file_path: str = "config.json"
+        file_path: str = "config2.json"
 ):
     """
     Creates a JSON config file with the provided video processing parameters.
@@ -150,7 +150,7 @@ if __name__ == '__main__':
         hsv_upper=(179, 80, 255),
         output_path="C:\\Users\\elad2\\Downloads\\tryinnn_no_mask.npy",
         apply_mask=False,
-        file_path="C:\\Users\\elad2\\Downloads\\config.json"
+        file_path="C:\\Users\\elad2\\Downloads\\config2.json"
     )
 
 

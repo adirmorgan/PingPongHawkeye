@@ -7,6 +7,11 @@ import numpy as np
 import json
 from typing import Tuple
 
+import cv2
+import numpy as np
+import json
+from typing import Tuple
+
 def Save_Video_To_npy_File_With_Or_without_HSV_Mask(
     video_path: str = None,
     hsv_lower: Tuple[int, int, int] = None,
@@ -15,12 +20,11 @@ def Save_Video_To_npy_File_With_Or_without_HSV_Mask(
     output_path: str = "C:\\Users\\elad2\\Downloads\\filtered_frames.npy",
     start_msec: int = 20500,
     apply_mask: bool = True,
-    use_config: bool = False,
-    config_path: str = "config.json"
+    config_path: str = None
 ):
     """
     Processes a video and optionally applies an HSV-based mask, then saves the frames as a NumPy array.
-    Supports optional loading of parameters from a JSON config file.
+    If config_path is provided, parameters are loaded from the config file.
 
     Args:
         video_path (str): Path to the input video file.
@@ -30,14 +34,13 @@ def Save_Video_To_npy_File_With_Or_without_HSV_Mask(
         output_path (str): Path to save the .npy file.
         start_msec (int): Start position in ms.
         apply_mask (bool): Whether to apply HSV mask.
-        use_config (bool): If True, parameters are loaded from config file.
-        config_path (str): Path to JSON config file.
+        config_path (str): Optional path to JSON config file.
 
     Raises:
         IOError: If the video cannot be opened.
     """
 
-    if use_config:
+    if config_path:
         with open(config_path, 'r') as f:
             config = json.load(f)
         video_path = config["video_path"]
@@ -82,6 +85,5 @@ def Save_Video_To_npy_File_With_Or_without_HSV_Mask(
 
 
 
-
 if __name__ == '__main__':
-    Save_Video_To_npy_File_With_Or_without_HSV_Mask(use_config=True, config_path="C:\\Users\\elad2\\Downloads\\config.json")
+    Save_Video_To_npy_File_With_Or_without_HSV_Mask(config_path="C:\\Users\\elad2\\Downloads\\config2.json")

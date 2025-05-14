@@ -135,7 +135,7 @@ def browse_contours_from_npy(npy_path: str,
 
 
 
-def detect_ball(frame: np.ndarray,
+def detect_ball_old_version(frame: np.ndarray,
                 roi_bounds: Tuple[int, int, int, int],
                 min_size: int,
                 max_size: int,
@@ -179,7 +179,7 @@ def detect_ball(frame: np.ndarray,
 
     return detected
 
-def detect_ball_ver2(frame: np.ndarray,
+def detect_ball(frame: np.ndarray,
                      roi_bounds: Tuple[int, int, int, int],
                      min_size: int,
                      max_size: int,
@@ -312,7 +312,7 @@ def browse_frames_with_detection(
 
     def show_frame(i):
         frame = frames_array[i]
-        detections = detect_ball_ver2(frame, roi_bounds, min_size, max_size, min_v_brightness,max_s_saturation, threshold_value)
+        detections = detect_ball(frame, roi_bounds, min_size, max_size, min_v_brightness,max_s_saturation, threshold_value)
         display = draw_ball_detections(frame, detections, roi_bounds)
         cv2.imshow(window_name, display)
 

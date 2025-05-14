@@ -187,46 +187,67 @@ def detect_ball_ver2(frame: np.ndarray,
                      max_s_saturation: int,
                      threshold_value: int) -> List[Tuple[int, int, int, int]]:
     """
-    Detects ball candidates in a frame based on ROI, size, brightness, saturation, and thresholding.
-    Uses bounding box for V and S channel mean calculation.
+    Detects potential ball candidates in a single frame using size filtering, region of interest,
+    brightness (V-channel), saturation (S-channel), and binary thresholding.
+
+    Detection logic:
+    - Converts frame to HSV color space and grayscale.
+    - Applies binary thresholding on grayscale image to find contours.
+    - For each contour, checks:
+        - If its bounding box is within the specified ROI
+        - If width and height are within [min_size, max_size]
+        - If mean V-channel brightness in the bounding box is above a given threshold
+        - If mean S-channel saturation in the bounding box is below a given threshold
+    - If all conditions are met, adds the bounding box to the output list.
 
     Args:
-        frame (np.ndarray): The input frame in BGR format.
-        roi_bounds (Tuple[int, int, int, int]): The region of interest (x_min, x_max, y_min, y_max).
-        min_size (int): Minimum width/height of detected contour.
-        max_size (int): Maximum width/height of detected contour.
-        min_v_brightness (int): Minimum mean V-channel brightness to qualify as ball.
-        min_s_saturation (int): Minimum mean S-channel saturation to qualify as ball.
-        threshold_value (int): Threshold value for binary segmentation (0-255).
+        frame (np.ndarray): The input BGR image/frame (e.g., from video or camera).
+        roi_bounds (Tuple[int, int, int, int]): The ROI boundaries as (x_min, x_max, y_min, y_max),
+                                                limiting where to search for ball candidates.
+        min_size (int): Minimum width and height of contour's bounding box.
+        max_size (int): Maximum width and height of contour's bounding box.
+        min_v_brightness (int): Minimum mean value of the V (brightness) channel required to qualify.
+        max_s_saturation (int): Maximum mean value of the S (saturation) channel to filter out colored areas.
+        threshold_value (int): Threshold for binarizing the grayscale image (range: 0–255).
 
     Returns:
-        List[Tuple[int, int, int, int]]: A list of bounding boxes (x, y, w, h) for detected balls.
+        List[Tuple[int, int, int, int]]: A list of bounding boxes (x, y, w, h) for contours
+                                         that meet all detection criteria.
     """
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    v_channel = hsv[:, :, 2]
-    s_channel = hsv[:, :, 1]
 
+    # Convert input frame to HSV and extract V and S channels
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    v_channel = hsv[:, :, 2]  # Brightness
+    s_channel = hsv[:, :, 1]  # Saturation
+
+    # Convert frame to grayscale and apply binary threshold
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     _, thresh = cv2.threshold(gray, threshold_value, 255, cv2.THRESH_BINARY)
 
+    # Find external contours in the thresholded binary image
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    detected = []
+    detected = []  # List to store valid bounding boxes
 
-    roi_x_min, roi_x_max, roi_y_min, roi_y_max = roi_bounds
+    roi_x_min, roi_x_max, roi_y_min, roi_y_max = roi_bounds  # Unpack ROI
 
     for cnt in contours:
+        # Calculate bounding box of contour
         x, y, w, h = cv2.boundingRect(cnt)
 
+        # Filter by bounding box size
         if min_size <= w <= max_size and min_size <= h <= max_size:
+            # Check if bounding box is within the ROI
             if roi_x_min <= x <= roi_x_max and roi_y_min <= y <= roi_y_max:
+                # Extract V and S values within bounding box
                 roi_v = v_channel[y:y+h, x:x+w]
                 roi_s = s_channel[y:y+h, x:x+w]
 
-                mean_v = np.mean(roi_v)
-                mean_s = np.mean(roi_s)
+                mean_v = np.mean(roi_v)  # Mean brightness
+                mean_s = np.mean(roi_s)  # Mean saturation
 
+                # Apply brightness and saturation filters
                 if mean_v > min_v_brightness and mean_s < max_s_saturation:
-                    detected.append((x, y, w, h))
+                    detected.append((x, y, w, h))  # Add valid bounding box to results
 
     return detected
 

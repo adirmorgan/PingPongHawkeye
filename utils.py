@@ -1,5 +1,46 @@
 import cv2
 import numpy as np
+import json
+
+
+def create_config_json_file_for_Save_npy_file(
+        video_path: str,
+        hsv_lower: tuple,
+        hsv_upper: tuple,
+        output_path: str,
+        max_frames: int = 300,
+        start_msec: int = 20500,
+        apply_mask: bool = True,
+        file_path: str = "config2.json"
+):
+    """
+    Creates a JSON config file with the provided video processing parameters.
+
+    Args:
+        video_path (str): Path to the input video.
+        hsv_lower (tuple): Lower HSV bounds (H, S, V).
+        hsv_upper (tuple): Upper HSV bounds (H, S, V).
+        output_path (str): Path to save the output .npy file.
+        max_frames (int): Max frames to process. Defaults to 300.
+        start_msec (int): Start time in ms. Defaults to 20500.
+        apply_mask (bool): Whether to apply HSV mask. Defaults to True.
+        file_path (str): Path to write the config JSON file. Defaults to 'config.json'.
+    """
+    config = {
+        "video_path": video_path,
+        "hsv_lower": list(hsv_lower),
+        "hsv_upper": list(hsv_upper),
+        "max_frames": max_frames,
+        "output_path": output_path,
+        "start_msec": start_msec,
+        "apply_mask": apply_mask
+    }
+
+    with open(file_path, "w") as f:
+        json.dump(config, f, indent=4)
+
+    print(f"Config file saved to {file_path}")
+
 
 def browse_npy_file(npy_path: str, window_name:str = 'Video'):
     try:
@@ -73,13 +114,45 @@ def save_video_as_array(vid_array, output_path):
         print("No frames were processed and saved.")
 
 
+import cv2
+import numpy as np
+import os
+
+def stream_and_save_video_as_array(video_path, output_path):
+    cap = cv2.VideoCapture(video_path)
+
+    if not cap.isOpened():
+        raise IOError(f"Cannot open video: {video_path}")
+
+    frame_list = []
+    frame_count = 0
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        frame_list.append(frame.astype(np.uint8))
+        frame_count += 1
+
+    cap.release()
+
+    frames_array = np.array(frame_list, dtype=np.uint8)
+    np.save(output_path, frames_array)
+    print(f"Saved {frame_count} frames to {output_path}")
+
+
+
 if __name__ == '__main__':
-    vid_array = load_video_to_array("Data/sim_data/camera1.mp4")
-    print("loaded video to np array")
+    create_config_json_file_for_Save_npy_file(
+        video_path="C:\\Users\\elad2\\Downloads\\pingpong_720p60_final.mp4",
+        hsv_lower=(0, 0, 195),
+        hsv_upper=(179, 80, 255),
+        output_path="C:\\Users\\elad2\\Downloads\\tryinnn_no_mask.npy",
+        apply_mask=False,
+        file_path="C:\\Users\\elad2\\Downloads\\config2.json"
+    )
 
-    output_path = "Data/test_data/test_processed_vid.npy"
-    save_video_as_array(vid_array, output_path)
-    print("saved np array")
 
-    browse_npy_file("Data/test_data/test_processed_vid.npy")
+
 

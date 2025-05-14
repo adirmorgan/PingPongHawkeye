@@ -2,6 +2,72 @@ import cv2
 import numpy as np
 from typing import List, Tuple
 
+
+
+def browse_contours_from_npy(npy_path: str,
+                              roi_bounds: Tuple[int, int, int, int],
+                              min_size: int,
+                              max_size: int,
+                              min_v_brightness: int,
+                              threshold_value: int,
+                              window_name: str = "Contours Viewer") -> None:
+    try:
+        frames_array = np.load(npy_path)
+    except Exception as e:
+        raise IOError(f"Failed to load frames from {npy_path}: {e}")
+
+    if frames_array.ndim != 4:
+        raise ValueError("Expected a 4D array (frames, height, width, channels)")
+
+    num_frames = frames_array.shape[0]
+    index = 0
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+
+    def show_frame(i: int):
+        frame = frames_array[i].copy()
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        _, thresh = cv2.threshold(gray, threshold_value, 255, cv2.THRESH_BINARY)
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        v_channel = hsv[:, :, 2]
+
+        for idx, cnt in enumerate(contours):
+            x, y, w, h = cv2.boundingRect(cnt)
+            if min_size <= w <= max_size and min_size <= h <= max_size:
+                if roi_bounds[0] <= x <= roi_bounds[1] and roi_bounds[2] <= y <= roi_bounds[3]:
+                    roi_v = v_channel[y:y+h, x:x+w]
+                    mean_v = np.mean(roi_v)
+                    if mean_v > min_v_brightness:
+                        cv2.drawContours(frame, [cnt], -1, (0, 255, 0), -1)
+                        text = f"{idx} | V={mean_v:.1f}"
+                        cv2.putText(frame, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX,
+                                    0.5, (0, 255, 0), 1, cv2.LINE_AA)
+
+        cv2.imshow(window_name, frame)
+
+    def on_trackbar(val: int):
+        nonlocal index
+        index = val
+        show_frame(index)
+
+    cv2.createTrackbar("Frame", window_name, 0, num_frames - 1, on_trackbar)
+    show_frame(index)
+    print("Controls:\n  ← / a = Previous\n  → / d = Next\n  q = Quit")
+
+    while True:
+        key = cv2.waitKey(0) & 0xFF
+        if key == ord('q'):
+            break
+        elif key in [ord('d'), 83, 0x27]:
+            index = (index + 1) % num_frames
+        elif key in [ord('a'), 81, 0x25]:
+            index = (index - 1) % num_frames
+        cv2.setTrackbarPos("Frame", window_name, index)
+        show_frame(index)
+
+    cv2.destroyAllWindows()
+
 def detect_ball(frame: np.ndarray,
                 roi_bounds: Tuple[int, int, int, int],
                 min_size: int,
@@ -46,6 +112,90 @@ def detect_ball(frame: np.ndarray,
 
     return detected
 
+from typing import List, Tuple
+import numpy as np
+import cv2
+
+from typing import List, Tuple
+import numpy as np
+import cv2
+
+def detect_ball_ver2(frame: np.ndarray,
+                     roi_bounds: Tuple[int, int, int, int],
+                     min_size: int,
+                     max_size: int,
+                     white_ratio_threshold: float,
+                     threshold_value: int) -> List[Tuple[int, int, int, int]]:
+    """
+    Detects white ball candidates in a frame based on ROI, size,
+    and HSV-based white isolation.
+
+    Args:
+        frame (np.ndarray): The input frame in BGR format.
+        roi_bounds (Tuple[int, int, int, int]): The region of interest (x_min, x_max, y_min, y_max).
+        min_size (int): Minimum width/height of detected contour.
+        max_size (int): Maximum width/height of detected contour.
+        white_ratio_threshold (float): Minimum ratio (0-1) of white pixels in contour to accept.
+        threshold_value (int): Threshold value for binary segmentation (0-255).
+
+    Returns:
+        List[Tuple[int, int, int, int]]: A list of bounding boxes (x, y, w, h) for detected white balls.
+    """
+    # המרה ל-HSV ולגרייסקל
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # סף בינארי לגילוי קונטורים
+    _, thresh = cv2.threshold(gray, threshold_value, 255, cv2.THRESH_BINARY)
+
+    # מציאת קונטורים חיצוניים
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    detected: List[Tuple[int, int, int, int]] = []
+
+    # הגדרת טווחי לבן ב-HSV
+    lower_white = np.array([0, 0, 200], dtype=np.uint8)
+    upper_white = np.array([180, 30, 255], dtype=np.uint8)
+
+    roi_x_min, roi_x_max, roi_y_min, roi_y_max = roi_bounds
+
+    for cnt in contours:
+        x, y, w, h = cv2.boundingRect(cnt)
+
+        # בדיקות גודל ו-ROI
+        if not (min_size <= w <= max_size and min_size <= h <= max_size):
+            continue
+        if not (roi_x_min <= x <= roi_x_max and roi_y_min <= y <= roi_y_max):
+            continue
+
+        # יצירת מסכה של הקונטור
+        mask = np.zeros(gray.shape, dtype=np.uint8)
+        cv2.drawContours(mask, [cnt], -1, 255, -1)
+
+        # בידוד הקונטור בצבע המקורי
+        contour_color = cv2.bitwise_and(frame, frame, mask=mask)
+
+        # חיתוך ה-ROI של הקונטור
+        contour_roi = contour_color[y:y + h, x:x + w]
+        mask_roi = mask[y:y + h, x:x + w]
+
+        # המרה ל-HSV עבור ה-ROI
+        hsv_roi = cv2.cvtColor(contour_roi, cv2.COLOR_BGR2HSV)
+
+        # יצירת מסכת לבן בתוך ה-ROI
+        white_mask_roi = cv2.inRange(hsv_roi, lower_white, upper_white)
+
+        # חישוב יחס הפיקסלים הלבנים לתוך הקונטור
+        white_pixels = cv2.countNonZero(cv2.bitwise_and(white_mask_roi, white_mask_roi, mask=mask_roi))
+        total_pixels = cv2.countNonZero(mask_roi)
+        ratio = white_pixels / total_pixels if total_pixels > 0 else 0
+
+        if ratio >= white_ratio_threshold:
+            detected.append((x, y, w, h))
+
+    return detected
+
+
+
 def draw_ball_detections(frame: np.ndarray,
                          detections: List[Tuple[int, int, int, int]],
                          roi_bounds: Tuple[int, int, int, int]) -> np.ndarray:
@@ -74,7 +224,7 @@ def browse_frames_with_detection(
     roi_bounds: Tuple[int, int, int, int],
     min_size: int = 7,
     max_size: int = 20,
-    min_v_brightness: int = 210,
+    min_v_brightness: float = 210,
     threshold_value: int = 15
 ):
     """
@@ -102,7 +252,7 @@ def browse_frames_with_detection(
 
     def show_frame(i):
         frame = frames_array[i]
-        detections = detect_ball(frame, roi_bounds, min_size, max_size, min_v_brightness, threshold_value)
+        detections = detect_ball_ver2(frame, roi_bounds, min_size, max_size, min_v_brightness, threshold_value)
         display = draw_ball_detections(frame, detections, roi_bounds)
         cv2.imshow(window_name, display)
 
@@ -132,11 +282,11 @@ def browse_frames_with_detection(
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    browse_frames_with_detection(
+    browse_contours_from_npy(
         npy_path="C:\\Users\\elad2\\Downloads\\tryinnn.npy",
         roi_bounds=(320, 900, 200, 470),
         min_size=7,
         max_size=20,
-        min_v_brightness=210,
-        threshold_value=15
+        min_v_brightness=160,
+        threshold_value=30
     )

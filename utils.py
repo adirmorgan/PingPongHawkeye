@@ -211,15 +211,16 @@ def stream_and_save_video_as_array(video_path, output_path):
 
 
 if __name__ == '__main__':
-    # create_config_json_file_for_Save_npy_file(
-    #     video_path="C:\\Users\\elad2\\Downloads\\pingpong_720p60_final.mp4",
-    #     hsv_lower=(0, 0, 195),
-    #     hsv_upper=(179, 80, 255),
-    #     output_path="C:\\Users\\elad2\\Downloads\\tryinnn_no_mask.npy",
-    #     apply_mask=False,
-    #     file_path="C:\\Users\\elad2\\Downloads\\config2.json"
-    # )
+    create_config_json_file_for_Save_npy_file(
+        video_path="C:\\Users\\elad2\\Downloads\\pingpong_720p60_final.mp4",
+        hsv_lower=(0, 0, 195),
+        hsv_upper=(179, 80, 255),
+        output_path="C:\\Users\\elad2\\Downloads\\tryinnn_no_mask.npy",
+        apply_mask=False,
+        file_path="C:\\Users\\elad2\\Downloads\\config2.json"
+    )
     browse_npy_file("C:\\Users\\elad2\\Downloads\\tryinnn.npy")
+
 
 
 

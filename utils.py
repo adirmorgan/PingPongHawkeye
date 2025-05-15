@@ -87,6 +87,73 @@ def browse_npy_file(npy_path: str, window_name:str = 'Video'):
 
     cv2.destroyAllWindows()
 
+def browse_contours_with_detection(frames_array: np.ndarray,
+                                   roi_bounds: Tuple[int, int, int, int],
+                                   min_size: int,
+                                   max_size: int,
+                                   min_v_brightness: int,
+                                   threshold_value: int,
+                                   window_name: str = "Contours Viewer") -> None:
+    """
+    Browse frames with contours drawn in green, and fill detected contours based on detection logic.
+
+    Args:
+        frames_array (np.ndarray): 4D numpy array (frames, height, width, channels).
+        roi_bounds, min_size, max_size, min_v_brightness, threshold_value: Parameters for detect_ball.
+        window_name (str): Name of the display window.
+    """
+    if frames_array.ndim != 4:
+        raise ValueError("Expected a 4D array (frames, height, width, channels)")
+
+    num_frames = frames_array.shape[0]
+    index = 0
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+
+    def show_frame(i: int):
+        frame = frames_array[i].copy()
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        _, thresh = cv2.threshold(gray, threshold_value, 255, cv2.THRESH_BINARY)
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        v_channel = hsv[:, :, 2]
+
+        for cnt in contours:
+            x, y, w, h = cv2.boundingRect(cnt)
+            if min_size <= w <= max_size and min_size <= h <= max_size:
+                if roi_bounds[0] <= x <= roi_bounds[1] and roi_bounds[2] <= y <= roi_bounds[3]:
+                    mask = np.zeros(gray.shape, dtype=np.uint8)
+                    cv2.drawContours(mask, [cnt], -1, 255, -1)
+                    mean_v = cv2.mean(v_channel, mask=mask)[0]
+                    if mean_v > min_v_brightness:
+                        cv2.drawContours(frame, [cnt], -1, (0, 255, 0), -1)  # Fill contour green
+
+        cv2.imshow(window_name, frame)
+
+    def on_trackbar(val: int):
+        nonlocal index
+        index = val
+        show_frame(index)
+
+    cv2.createTrackbar("Frame", window_name, 0, num_frames - 1, on_trackbar)
+    show_frame(index)
+    print("Controls:\n  ← / a = Previous\n  → / d = Next\n  q = Quit")
+
+    while True:
+        key = cv2.waitKey(0) & 0xFF
+        if key == ord('q'):
+            break
+        elif key in [ord('d'), 83, 0x27]:
+            index = (index + 1) % num_frames
+        elif key in [ord('a'), 81, 0x25]:
+            index = (index - 1) % num_frames
+        cv2.setTrackbarPos("Frame", window_name, index)
+        show_frame(index)
+
+    cv2.destroyAllWindows()
+
+
+
 def load_video_to_array(video_path):
     cap = cv2.VideoCapture(video_path)
 
@@ -152,6 +219,8 @@ if __name__ == '__main__':
         apply_mask=False,
         file_path="C:\\Users\\elad2\\Downloads\\config2.json"
     )
+    browse_npy_file("C:\\Users\\elad2\\Downloads\\tryinnn.npy")
+
 
 
 

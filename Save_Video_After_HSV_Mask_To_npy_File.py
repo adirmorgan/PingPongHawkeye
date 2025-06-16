@@ -13,13 +13,13 @@ import json
 from typing import Tuple
 
 def Save_Video_To_npy_File_With_Or_without_HSV_Mask(
-    video_path: str = None,
+    video_path: str,
     hsv_lower: Tuple[int, int, int] = None,
     hsv_upper: Tuple[int, int, int] = None,
     max_frames: int = 300,
-    output_path: str = "C:\\Users\\elad2\\Downloads\\filtered_frames.npy",
-    start_msec: int = 20500,
-    apply_mask: bool = True,
+    output_path: str = "C:\\Users\\itays\\Downloads\\pingpong.npy",
+    start_msec: int = 0,
+    apply_mask: bool = False,
     config_path: str = None
 ):
     """
@@ -86,4 +86,4 @@ def Save_Video_To_npy_File_With_Or_without_HSV_Mask(
 
 
 if __name__ == '__main__':
-    Save_Video_To_npy_File_With_Or_without_HSV_Mask(config_path="C:\\Users\\elad2\\Downloads\\config2.json")
+    Save_Video_To_npy_File_With_Or_without_HSV_Mask(video_path="C:\\Users\\itays\\Downloads\\Game.mp4")

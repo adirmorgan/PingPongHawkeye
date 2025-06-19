@@ -7,8 +7,11 @@ from typing import List, Tuple
 
 def shape_score(contour: np.ndarray, cfg: dict) -> float:
     """
-    Compute an elliptical score for a contour.
-    Score = minor_axis_length / major_axis_length (0.0 to 1.0).
+    Compute a composite elliptical score for a contour.
+    The score is a weighted combination of:
+      1. Axis ratio (minor_axis_length / major_axis_length).
+      2. Mean normalized distance from the contour points to the fitted ellipse boundary.
+    Weights are defined in the config via 'ellipse_weight' (0.0 to 1.0).
     """
     if len(contour) < 5:
         return 0.0
@@ -16,7 +19,17 @@ def shape_score(contour: np.ndarray, cfg: dict) -> float:
     (_, _), (major, minor), _ = ellipse
     if major == 0:
         return 0.0
-    return min(major, minor) / max(major, minor)
+
+    axis_ratio = min(major, minor) / max(major, minor)
+
+    ellipse_mask = np.zeros((cfg["frame_height"], cfg["frame_width"]), dtype=np.uint8)
+    cv2.ellipse(ellipse_mask, ellipse, 255, -1)
+    distances_to_ellipse = cv2.pointPolygonTest(contour, True)
+    mean_normalized_distance = np.mean(np.abs(distances_to_ellipse)) / max(major, minor)
+
+    ellipse_weight = cfg.get('ellipse_weight', 0.5)
+    composite_score = (1 - ellipse_weight) * axis_ratio + ellipse_weight * (1 - mean_normalized_distance)
+    return max(0.0, min(composite_score, 1.0))
 
 
 def preprocess_mask(frame: np.ndarray, cfg: dict) -> np.ndarray:

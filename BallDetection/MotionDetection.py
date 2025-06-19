@@ -14,6 +14,8 @@ def compute_kstep_mask(frames: np.ndarray, frame_index: int, k: int, threshold: 
     prev = cv2.cvtColor(frames[frame_index - k], cv2.COLOR_BGR2GRAY).astype(np.float32)
     diff = cv2.absdiff(curr, prev)
     mask = (diff > threshold).astype(np.uint8) * 255
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.dilate(mask, kernel, iterations=1)
     return mask
 
 
@@ -76,7 +78,7 @@ def Motion_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, 
     weights = np.exp(-d2 / (2 * sigma**2))
 
     # Motion values normalized to [0,1]
-    mvals = mask[ys, xs].astype(np.float32) / 255.0
+    mvals = region[ys, xs].astype(np.float32) / 255.0
 
     # Weighted average
     weighted_sum = np.sum(weights * mvals)

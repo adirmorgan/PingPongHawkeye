@@ -7,8 +7,9 @@ from typing import List, Tuple
 
 def Color_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, cfg: dict) -> float:
     """
-    Compute a color score for the region inside the contour.
+    Compute a color score for the entire surface inside the contour.
     Score is normalized mean V-channel brightness (0.0 to 1.0).
+    The calculation considers the full region enclosed by the contour.
     cfg keys:
       "min_v_brightness": int
     """
@@ -16,8 +17,8 @@ def Color_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, c
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     v = hsv[:, :, 2]
     mask = np.zeros_like(v, dtype=np.uint8)
-    cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)
-    vals = v[mask == 255]
+    cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)  # Fill the entire contour area for accurate scoring
+    vals = v[mask == 255]  # Brightness values from the full surface enclosed by the contour
     if vals.size == 0:
         return 0.0
     mean_v = float(np.mean(vals))

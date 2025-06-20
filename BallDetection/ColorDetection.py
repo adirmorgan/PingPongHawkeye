@@ -8,29 +8,53 @@ from typing import List, Tuple
 def Color_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, cfg: dict) -> float:
     """
     Compute a color score for the region inside the contour.
-    Score is normalized mean V-channel brightness (0.0 to 1.0).
+    Score is normalized mean V-channel brightness (0.0 to 1.0),
+    only if the region is inside the ROI, V is high enough, and S is low enough.
+
     cfg keys:
       "min_v_brightness": int
+      "max_s_saturation": int
+      "roi_bounds": [x_min, x_max, y_min, y_max]
     """
     frame = frames[frame_index]
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    v = hsv[:, :, 2]
-    mask = np.zeros_like(v, dtype=np.uint8)
+    v_channel = hsv[:, :, 2]
+    s_channel = hsv[:, :, 1]
+
+    # בדיקת מיקום הקונטור מול תחום ה-ROI
+    x, y, w, h = cv2.boundingRect(contour)
+    x_min, x_max, y_min, y_max = cfg.get("roi_bounds", [0, frame.shape[1], 0, frame.shape[0]])
+
+    if not (x_min <= x <= x_max and y_min <= y <= y_max):
+        return 0.0
+
+    # מסכה פנימית של הקונטור
+    mask = np.zeros_like(v_channel, dtype=np.uint8)
     cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)
-    vals = v[mask == 255]
-    if vals.size == 0:
+
+    vals_v = v_channel[mask == 255]
+    vals_s = s_channel[mask == 255]
+
+    if vals_v.size == 0 or vals_s.size == 0:
         return 0.0
-    mean_v = float(np.mean(vals))
-    if mean_v < cfg.get('min_v_brightness', 0):
+
+    mean_v = float(np.mean(vals_v))
+    mean_s = float(np.mean(vals_s))
+
+    min_v = cfg.get('min_v_brightness', 200)
+    max_s = cfg.get('max_s_saturation', 30)
+
+    if mean_v < min_v or mean_s > max_s:
         return 0.0
+
     return mean_v / 255.0
 
 
 def detect_ball_contours(frame: np.ndarray, cfg: dict):
     # 1) convert to HSV and threshold for white
     hsv  = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    lower = np.array(cfg['lower_thresh'], dtype=np.uint8)
-    upper = np.array(cfg['upper_thresh'], dtype=np.uint8)
+    lower = np.array(cfg['lower_hsv'], dtype=np.uint8)
+    upper = np.array(cfg['upper_hsv'], dtype=np.uint8)
     mask  = cv2.inRange(hsv, lower, upper)
 
     # 2) clean up small holes and noise

@@ -75,7 +75,6 @@ def collect_hsv_of_moving_ball(npy_path: str, max_object_size: int = 200, output
                     # Store for green highlight in frame
                     current_click["mask"] = mask
                     current_click["contour"] = cnt
-
                     print(f"Frame {frame_index} — Selected object with {num_pixels} pixels. Mean HSV: {mean_hsv.round(1)}")
                     break
 
@@ -118,7 +117,7 @@ def collect_hsv_of_moving_ball(npy_path: str, max_object_size: int = 200, output
 
 if __name__ == '__main__':
     hsv_values = collect_hsv_of_moving_ball(
-        "C:\\Users\\elad2\\Downloads\\tryinnn_no_mask.npy",
+        "C:\\Users\\elad2\\Downloads\\tryinnn.npy",
         max_object_size=200,
         output_csv_path="C:\\Users\\elad2\\Downloads\\hsv_click_summary.csv"
     )

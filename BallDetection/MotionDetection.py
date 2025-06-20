@@ -43,7 +43,7 @@ def Motion_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, 
         k = cfg.get('motion_k', 5)
         thr = cfg.get('motion_threshold', 25.0)
         mask = compute_kstep_mask(frames, frame_index, k, thr)
-    elif "background":
+    elif method == "background":
         lr = cfg.get('background_learning_rate', 0.01)
         thr = cfg.get('background_threshold', 30)
         bg = compute_background_model(frames, frame_index, lr)

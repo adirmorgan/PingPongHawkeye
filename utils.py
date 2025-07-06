@@ -1,10 +1,8 @@
-import cv2
-import numpy as np
 import json
-import cv2
 from BallDetection.ShapeDetection import preprocess_mask
 from typing import List, Tuple
 import numpy as np
+import cv2
 
 def Contours(frames: np.ndarray, frame_index: int, cfg: dict) -> List[Tuple[np.ndarray, int]]:
     """

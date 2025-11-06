@@ -1,9 +1,7 @@
-import json
 import argparse
-import cv2
-import numpy as np
-from typing import List, Tuple
 
+import utils
+from utils import *
 
 def Color_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, cfg: dict) -> float:
     """
@@ -54,7 +52,6 @@ def detect_ball_contours(frame: np.ndarray, cfg: dict):
         valid.append(cnt)
 
     return valid, mask
-
 
 def main():
     parser = argparse.ArgumentParser(

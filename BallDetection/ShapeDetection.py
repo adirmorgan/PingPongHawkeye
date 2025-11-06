@@ -3,6 +3,7 @@ import argparse
 import cv2
 import numpy as np
 from typing import List, Tuple
+from utils import *
 
 def preprocess_mask(frame: np.ndarray, cfg: dict) -> np.ndarray:
     """
@@ -10,6 +11,10 @@ def preprocess_mask(frame: np.ndarray, cfg: dict) -> np.ndarray:
     cfg keys:
       "color_space", "lower_thresh", "upper_thresh", "lab_thresh", "lab_ref"
     """
+    # Ensure frame has 3 channels: Convert grayscale to BGR if necessary
+    if len(frame.shape) == 2 or frame.shape[2] == 1:  # Check for grayscale/single-channel image
+        frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+
     lab_thresh = cfg.get('lab_thresh', None)
     if lab_thresh is not None:
         lab = cv2.cvtColor(frame, cv2.COLOR_BGR2Lab).astype(np.float32)
@@ -25,10 +30,11 @@ def preprocess_mask(frame: np.ndarray, cfg: dict) -> np.ndarray:
         mask = cv2.inRange(cs, lower, upper)
     mask = cv2.GaussianBlur(mask, (5, 5), 0)
     kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-    kernel_open  = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_close)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_open)
     return mask
+
 
 def Shape_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, cfg: dict) -> float:
     """
@@ -89,41 +95,3 @@ def Shape_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, c
     w = cfg.get('ellipse_weight', 0.5)
     composite = (1 - w) * axis_ratio + w * (1 - mean_norm_dist)
     return float(np.clip(composite, 0.0, 1.0))
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Standalone test for shape detection scoring")
-    parser.add_argument('config', help='Path to JSON config file')
-    parser.add_argument('--export-config', dest='export_config', help='Optional path to save config')
-    args = parser.parse_args()
-
-    cfg = json.load(open(args.config, 'r', encoding='utf-8'))['shape_detection']
-    frames = np.load(cfg['video_npy'])
-    window = cfg.get('shape_window', 'Shape Detection')
-    delay = int(cfg.get('display_fps_delay', 30))
-
-    cv2.namedWindow(window, cv2.WINDOW_NORMAL)
-    idx = 0
-    while True:
-        frame = frames[idx]
-        mask = preprocess_mask(frame, cfg)
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        display = frame.copy()
-        for cnt in contours:
-            score = Shape_Detection(frames, idx, cnt, cfg)
-            x, y, w_rect, h_rect = cv2.boundingRect(cnt)
-            cv2.rectangle(display, (x, y), (x+w_rect, y+h_rect), (0, 255, 0), 2)
-            cv2.putText(display, f"{score:.2f}", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        cv2.imshow(window, display)
-        key = cv2.waitKey(delay) & 0xFF
-        if key == ord('q'):
-            break
-        elif key in [ord('d'), 83]:
-            idx = (idx + 1) % len(frames)
-        elif key in [ord('a'), 81]:
-            idx = (idx - 1) % len(frames)
-
-    cv2.destroyAllWindows()
-    if args.export_config:
-        with open(args.export_config, 'w', encoding='utf-8') as ef:
-            json.dump({'shape_detection': cfg}, ef, indent=4)
-        print(f"Config exported to {args.export_config}")

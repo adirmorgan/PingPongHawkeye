@@ -3,7 +3,7 @@ import argparse
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-
+from utils import *
 
 def plot_trajectory(coordinates: list, cfg: dict):
     """

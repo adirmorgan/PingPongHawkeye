@@ -2,7 +2,34 @@ import json
 from BallDetection.ShapeDetection import preprocess_mask
 from typing import List, Tuple
 import numpy as np
-import cv2
+import time
+from functools import wraps
+
+import time
+from functools import wraps
+
+class timeit:
+    def __init__(self, label=None):
+        self.label = label or "Block"
+
+    # as context manager
+    def __enter__(self):
+        self._start = time.perf_counter()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        end = time.perf_counter()
+        print(f"{self.label} took {end - self._start:.6f} seconds")
+
+    # as decorator
+    def __call__(self, func):
+        label = self.label or func.__name__
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            with timeit(label):
+                return func(*args, **kwargs)
+        return wrapper
 
 def Contours(frames: np.ndarray, frame_index: int, cfg: dict) -> List[Tuple[np.ndarray, int]]:
     """

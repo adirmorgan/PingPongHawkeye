@@ -2,7 +2,7 @@ import json
 import argparse
 import cv2
 import numpy as np
-
+from utils import *
 
 def compute_kstep_mask(frames: np.ndarray, frame_index: int, k: int, threshold: float) -> np.ndarray:
     """
@@ -27,7 +27,6 @@ def compute_background_model(frames: np.ndarray, frame_index: int, learning_rate
     for i in range(1, frame_index):
         cv2.accumulateWeighted(frames[i], background, learning_rate)
     return cv2.convertScaleAbs(background)
-
 
 def Motion_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, cfg: dict) -> float:
     """

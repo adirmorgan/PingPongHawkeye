@@ -4,7 +4,7 @@ import numpy as np
 import cv2  # Replacing cv2.sfm import
 
 from Combine import TOP_2D
-
+from utils import *
 
 def build_projection_matrices(cameras_file):
     """
@@ -22,13 +22,13 @@ def build_projection_matrices(cameras_file):
         P_list.append(P)
     return P_list
 
-
-def TOP_3D(frames_at_t: list[np.ndarray], full_cfg: dict) -> tuple[float, float, float] | None:
+def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tuple[float, float, float] | None:
     """
     Triangulate a 3D point from multiple camera frames at a single time instant.
 
     Args:
-        frames_at_t: list of single-frame arrays, one per camera
+        all_frames: list of all frames from all cameras
+        frame_index: index of the frame to triangulate
         full_cfg: loaded JSON config
 
     Returns:
@@ -39,18 +39,22 @@ def TOP_3D(frames_at_t: list[np.ndarray], full_cfg: dict) -> tuple[float, float,
     P_list = build_projection_matrices(cameras_file)
 
     # Get corresponding 2D points from all camera frames
-    pts2d = [TOP_2D(frame=frm, full_cfg=full_cfg) for frm in frames_at_t]
+    pts2d = [TOP_2D(frames, frame_index, full_cfg=full_cfg) for frames in all_frames]
+
+    # TODO: choose cameras-pair wisely (sensor merging)
+    cam1 = 0  # arbitrary choice, not a wise one...
+    cam2 = 1  # arbitrary choice, not a wise one...
 
     # Validate that at least two 2D points were found
-    if len(pts2d) < 2 or pts2d[0] is None or pts2d[1] is None:
+    if len(pts2d) < 2 or pts2d[cam1] is None or pts2d[cam2] is None:
         return None
 
     # Prepare 2D points for triangulation
-    x1 = np.array(pts2d[0], dtype=float).reshape(2, 1)  # First camera
-    x2 = np.array(pts2d[1], dtype=float).reshape(2, 1)  # Second camera
+    x1 = np.array(pts2d[cam1], dtype=float).reshape(2, 1)  # First camera
+    x2 = np.array(pts2d[cam2], dtype=float).reshape(2, 1)  # Second camera
 
     # Perform triangulation using cv2.triangulatePoints
-    X_hom = cv2.triangulatePoints(P_list[0], P_list[1], x1, x2)
+    X_hom = cv2.triangulatePoints(P_list[cam1], P_list[cam2], x1, x2)
 
     # Convert homogeneous coordinates to 3D coordinates
     X_hom /= X_hom[3, 0]
@@ -75,32 +79,17 @@ def main():
     n_frames = all_frames[0].shape[0]
 
     trajectory = []
-    for i in range(n_frames):
-        frames_at_t = [cam[i] for cam in all_frames]  # Extract frames for a single time instant
-        point3d = TOP_3D(frames_at_t, full_cfg)
-        entry = {'t': i / fps, 'x': None, 'y': None, 'z': None}
-        if point3d:
-            entry.update({'x': point3d[0], 'y': point3d[1], 'z': point3d[2]})
-        trajectory.append(entry)
+    for frame_idx in range(n_frames):
+        with timeit(f"Frame {frame_idx} of {n_frames}"):
+            point3d = TOP_3D(all_frames, frame_idx, full_cfg)
+            entry = {'t': frame_idx / fps, 'x': None, 'y': None, 'z': None}
+            if point3d:
+                entry.update({'x': point3d[0], 'y': point3d[1], 'z': point3d[2]})
+            trajectory.append(entry)
 
     with open(out_path, 'w') as f:
         json.dump(trajectory, f, indent=4)
     print(f"3D trajectory saved to {out_path}")
-
-
-
-
-
-'''
-''
-
-
-
-''
-'''
-
-
-
 
 def run_gui(full_cfg):
     phys_cfg = full_cfg['PhysicalPosition']
@@ -108,16 +97,16 @@ def run_gui(full_cfg):
     n_frames = all_frames[0].shape[0]
 
     paused = False
-    idx = 0
     cv2.namedWindow('Physical Position GUI')
-    while True:
-        if not paused:
-            idx = (idx + 1) % n_frames
+    for frame_idx in range(n_frames):
+        if paused:
+            frame_idx = frame_idx - 1
         # combine 2D and draw
         out = []
-        for cam_idx, frame in enumerate(all_frames):
-            pt = TOP_2D(frame[idx], full_cfg)
-            disp = frame[idx].copy()
+        for cam_idx in range(len(all_frames)):
+            frames = all_frames[cam_idx]
+            pt = TOP_2D(frames, frame_idx, full_cfg)
+            disp = frames[frame_idx].copy()
             if pt:
                 cv2.rectangle(disp, (pt[0]-5,pt[1]-5),(pt[0]+5,pt[1]+5),(0,0,255),2)
             out.append(disp)
@@ -130,9 +119,15 @@ def run_gui(full_cfg):
         elif key == ord(' '):
             paused = not paused
         elif paused and key == ord('d'):
-            idx = (idx + 1) % n_frames
+           frame_idx = (frame_idx + 1) % n_frames
         elif paused and key == ord('a'):
-            idx = (idx - 1) % n_frames
+           frame_idx = (frame_idx - 1) % n_frames
+        if key == ord('w'):
+           frame_idx = (frame_idx + 10) % n_frames
+        if key == ord('s'):
+           frame_idx = (frame_idx - 10) % n_frames
+
+
     cv2.destroyAllWindows()
 
 
@@ -145,4 +140,10 @@ def main_gui():
     run_gui(full_cfg)
 
 if __name__ == '__main__':
-    main_gui()
+    choice = input("GUI or AUTO? (G/A) ")
+    if choice == 'G' or choice == 'g':
+        main_gui()
+    elif choice == 'A' or choice == 'a':
+        main()
+    else:
+        print("Invalid choice. Exiting.")

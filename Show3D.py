@@ -1,6 +1,7 @@
 import json
 import argparse
 import matplotlib.pyplot as plt
+from utils import *
 
 def plot_trajectory(coords, config):
     """

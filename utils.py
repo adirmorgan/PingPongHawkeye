@@ -1,6 +1,36 @@
-import cv2
-import numpy as np
 import json
+from BallDetection.ShapeDetection import preprocess_mask
+from typing import List, Tuple
+import numpy as np
+import cv2
+
+def Contours(frames: np.ndarray, frame_index: int, cfg: dict) -> List[Tuple[np.ndarray, int]]:
+    """
+    Return all contours in the given frame after masking via your shape thresholds.
+
+    Args:
+      frames (np.ndarray): video frames array.
+      frame_index (int): index of the current frame.
+      cfg (dict): shape_detection config section (color_space, thresholds, lab settings, etc.)
+
+    Returns:
+      List of (contour, idx) tuples.
+    """
+    frame = frames[frame_index]
+    mask = preprocess_mask(frame, cfg)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    return [(cnt, i) for i, cnt in enumerate(contours)]
+
+def get_coordinates(contour):
+    """
+    Compute centroid (x, y) of given contour using image moments.
+    """
+    moments = cv2.moments(contour)
+    if moments['m00'] != 0:
+        x = int(moments['m10'] / moments['m00'])
+        y = int(moments['m01'] / moments['m00'])
+        return (x, y)
+    return None
 
 
 def create_config_json_file_for_Save_npy_file(

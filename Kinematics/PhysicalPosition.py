@@ -39,7 +39,7 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
     P_list = build_projection_matrices(cameras_file)
 
     # Get corresponding 2D points from all camera frames
-    pts2d = [TOP_2D(frames, frame_index, full_cfg=full_cfg) for frames in all_frames]
+    pts2d = [TOP_2D(frames, frame_index, full_cfg=full_cfg)[0] for frames in all_frames]
 
     # TODO: choose cameras-pair wisely (sensor merging)
     cam1 = 0  # arbitrary choice, not a wise one...
@@ -70,6 +70,7 @@ def main():
 
     full_cfg = json.load(open(args.config, 'r'))
     phys_cfg = full_cfg['PhysicalPosition']
+    timing(full_cfg['timing'])
     npy_files = phys_cfg['npy_files']
     fps = phys_cfg['frame_rate']
     out_path = phys_cfg['output_trajectory']
@@ -105,9 +106,9 @@ def run_gui(full_cfg):
         out = []
         for cam_idx in range(len(all_frames)):
             frames = all_frames[cam_idx]
-            pt = TOP_2D(frames, frame_idx, full_cfg)
+            pt,_ = TOP_2D(frames, frame_idx, full_cfg)
             disp = frames[frame_idx].copy()
-            if pt:
+            if pt is not None:
                 cv2.rectangle(disp, (pt[0]-5,pt[1]-5),(pt[0]+5,pt[1]+5),(0,0,255),2)
             out.append(disp)
         # stack horizontally
@@ -137,6 +138,7 @@ def main_gui():
     args = parser.parse_args()
 
     full_cfg = json.load(open(args.config,'r'))
+    timing(full_cfg['timing'])
     run_gui(full_cfg)
 
 if __name__ == '__main__':

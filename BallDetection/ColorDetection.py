@@ -28,8 +28,8 @@ def Color_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, c
 def detect_ball_contours(frame: np.ndarray, cfg: dict):
     # 1) convert to HSV and threshold for white
     hsv  = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    lower = np.array(cfg['lower_thresh'], dtype=np.uint8)
-    upper = np.array(cfg['upper_thresh'], dtype=np.uint8)
+    lower = np.array(cfg['lower_hsv'], dtype=np.uint8)
+    upper = np.array(cfg['upper_hsv'], dtype=np.uint8)
     mask  = cv2.inRange(hsv, lower, upper)
 
     # 2) clean up small holes and noise

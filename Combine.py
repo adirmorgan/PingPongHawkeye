@@ -5,102 +5,193 @@ import numpy as np
 import cv2
 
 from BallDetection import MotionDetection, ShapeDetection, ColorDetection
-from utils import *
+from utils import *  # assumes timeit, timing, Contours, get_coordinates exist
+
+
+def combine_scores(strategy: str,
+                   s_score: float,
+                   c_score: float,
+                   m_score: float,
+                   s_w: float,
+                   c_w: float,
+                   m_w: float) -> float:
+    """
+    Combine three scores according to the selected strategy.
+    All scores are assumed to be in [0, 1].
+    """
+    match strategy:
+        case "augment":   # weighted RMS
+            return (s_w * s_score ** 2 + c_w * c_score ** 2 + m_w * m_score ** 2) ** 0.5
+        case "maximize":
+            return max(s_score, c_score, m_score)
+        case "gather":    # weighted arithmetic mean
+            return s_score * s_w + c_score * c_w + m_score * m_w
+        case "filter":    # weighted geometric mean
+            total_w = s_w + c_w + m_w
+            if total_w <= 0:
+                return 0.0
+            # Avoid log/zero issues by clipping
+            s = max(s_score, 1e-8)
+            c = max(c_score, 1e-8)
+            m = max(m_score, 1e-8)
+            return (s ** s_w * c ** c_w * m ** m_w) ** (1.0 / total_w)
+        case "minimize":
+            return min(s_score, c_score, m_score)
+        case "diminish":  # weighted harmonic mean
+            denom = 0.0
+            if s_score > 0:
+                denom += s_w / s_score
+            if c_score > 0:
+                denom += c_w / c_score
+            if m_score > 0:
+                denom += m_w / m_score
+            return 1.0 / denom if denom > 0 else 0.0
+        case _:
+            return 0.0
+
 
 @timeit("TOP_2D")
-def TOP_2D(frames: np.ndarray, frame_index:int, full_cfg: dict) -> tuple[int,int] | None:
+def TOP_2D(frames: np.ndarray,
+           frame_index: int,
+           full_cfg: dict) -> tuple[tuple[int, int] | None,
+                                     list[tuple[np.ndarray, float, float, float, float]]]:
     """
-    Process a single frame and return the best-match centroid (x, y) or None.
+    Process a single frame:
+      - Extract candidate contours.
+      - Compute shape/color/motion scores for each.
+      - Combine scores according to config.
+    Returns:
+      best_coord: (x, y) of best contour's centroid or None
+      scored: list of (contour, combined_score_score, s_score, c_score, m_score)
     """
     with timeit("Setup"):
-        combine_cfg = full_cfg['combine']
-        shape_cfg   = full_cfg['shape_detection']
-        color_cfg   = full_cfg['color_detection']
-        motion_cfg  = full_cfg['motion_detection']
+        combine_cfg = full_cfg["combine"]
+        shape_cfg = full_cfg["shape_detection"]
+        color_cfg = full_cfg["color_detection"]
+        motion_cfg = full_cfg["motion_detection"]
 
-        s_w = combine_cfg['shape_weight']
-        c_w = combine_cfg['color_weight']
-        m_w = combine_cfg['motion_weight']
-        min_score = combine_cfg.get('min_score', 0.0)
+        s_w = float(combine_cfg["shape_weight"])
+        c_w = float(combine_cfg["color_weight"])
+        m_w = float(combine_cfg["motion_weight"])
+        min_score = float(combine_cfg.get("min_score", 0.0))
+        strategy = combine_cfg.get("strategy", "gather")
 
     best_score = min_score
     best_contour = None
+    scored: list[tuple[np.ndarray, float, float, float, float]] = []
 
-    # wrap the single frame into a frames-array for Contours()
-    frames = np.array(frames)
     with timeit("Contours"):
+        # Contours() is expected to use frames[frame_index] internally with shape config
         contours = Contours(frames, frame_index, shape_cfg)
 
     for contour, _ in contours:
         with timeit("Shape Detection"):
-            s_score = ShapeDetection.Shape_Detection(frames, frame_index, contour, shape_cfg)
+            s_score = float(ShapeDetection.Shape_Detection(frames, frame_index, contour, shape_cfg))
         with timeit("Color Detection"):
-            c_score = ColorDetection.Color_Detection(frames, frame_index, contour, color_cfg)
+            c_score = float(ColorDetection.Color_Detection(frames, frame_index, contour, color_cfg))
         with timeit("Motion Detection"):
-            m_score = MotionDetection.Motion_Detection(frames, frame_index, contour, motion_cfg)
+            m_score = float(MotionDetection.Motion_Detection(frames, frame_index, contour, motion_cfg))
 
         with timeit("Combining scores"):
-            strategy = combine_cfg.get('strategy', 'gather')
-            match strategy:
-                case "augment":   # weighted RMS
-                    score = (s_w*s_score**2 + c_w*c_score**2 + m_w*m_score**2) ** 0.5
-                case "maximize":
-                    score = max(s_score, c_score, m_score)
-                case "gather":    # weighted arithmetic mean
-                    score = (s_score * s_w + c_score * c_w + m_score * m_w)
-                case "filter":    # weighted geometric mean
-                    total_w = s_w + c_w + m_w
-                    score = (s_score**s_w * c_score**c_w * m_score**m_w) ** (1.0/total_w)
-                case "minimize":
-                    score = min(s_score, c_score, m_score)
-                case "diminish":  # weighted harmonic mean
-                    denom = 0.0
-                    if s_score > 0: denom += s_w/s_score
-                    if c_score > 0: denom += c_w/c_score
-                    if m_score > 0: denom += m_w/m_score
-                    score = 1.0/denom if denom>0 else 0.0
-                case _:
-                    score = 0.0
+            combined_score = combine_scores(strategy, s_score, c_score, m_score, s_w, c_w, m_w)
 
-            if score > best_score:
-                best_score   = score
-                best_contour = contour
+        scored.append((contour, combined_score, s_score, c_score, m_score))
 
-        return get_coordinates(best_contour) if best_contour is not None else None
+        if combined_score > best_score:
+            best_score = combined_score
+            best_contour = contour
+
+    best_coord = get_coordinates(best_contour) if best_contour is not None else None
+    return best_coord, scored
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Combine detections to track ping-pong ball (2D)"
+        description="Combine Motion/Shape/Color to track ping-pong ball (2D) with GUI"
     )
-    parser.add_argument('config', help='Path to JSON config file')
+    parser.add_argument("config", help="Path to JSON config file")
     parser.add_argument(
-        '--export-coords',
-        dest='export_coords',
-        help='Optional path to save 2D coordinates JSON'
+        "--export-coords",
+        dest="export_coords",
+        help="Optional path to save 2D coordinates JSON"
     )
     args = parser.parse_args()
 
-    # load full config
-    with open(args.config, 'r', encoding='utf-8') as f:
+    # Load full configuration
+    with open(args.config, "r", encoding="utf-8") as f:
         full_cfg = json.load(f)
 
-    # load all frames
-    npy_path = full_cfg['combine']['npy_file']
+    combine_cfg = full_cfg["combine"]
+
+    # Global timing toggle
+    timing(combine_cfg.get("timing", False))
+
+    # Load frames
+    npy_path = combine_cfg["npy_file"]
     frames = np.load(npy_path)
 
-    coords = []
-    for idx, frame in enumerate(frames):
-        coord = TOP_2D(frame, full_cfg)
-        coords.append(coord)
-        if full_cfg['combine'].get('print', False):
-            print(f"Frame {idx}: {coord}")
+    # Visualization params
+    window_name = combine_cfg.get("window_name", "combined_score Detection")
+    delay = int(combine_cfg.get("display_fps_delay", 30))
+    min_score = float(combine_cfg.get("min_score", 0.0))
+    mark_best = bool(combine_cfg.get("mark_best", True))
+    show_components = bool(combine_cfg.get("show_components", False))
 
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+
+    coords: list[tuple[int, int] | None] = []
+
+    for frame_idx in range(frames.shape[0]):
+        frame = frames[frame_idx]
+        display = frame.copy()
+
+        best_coord, scored = TOP_2D(frames, frame_idx, full_cfg)
+        coords.append(best_coord)
+
+        # Draw all contours with combined_score score >= min_score
+        for contour, combined_score, s_score, c_score, m_score in scored:
+            if combined_score >= min_score:
+                x, y, w, h = cv2.boundingRect(contour)
+                cv2.rectangle(display, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+                if show_components:
+                    text = f"{combined_score:.2f} S:{s_score:.2f} C:{c_score:.2f} M:{m_score:.2f}"
+                else:
+                    text = f"{combined_score:.2f}"
+
+                cv2.putText(
+                    display,
+                    text,
+                    (x, max(y - 5, 0)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 0, 255),
+                    1,
+                    cv2.LINE_AA,
+                )
+
+        # Optionally highlight best centroid
+        if mark_best and best_coord is not None:
+            cx, cy = int(best_coord[0]), int(best_coord[1])
+            cv2.circle(display, (cx, cy), 5, (255, 0, 0), -1)
+
+        # Optional per-frame logging
+        if combine_cfg.get("print", False):
+            print(f"Frame {frame_idx}: {best_coord}")
+
+        cv2.imshow(window_name, display)
+        key = cv2.waitKey(delay) & 0xFF
+        if key == ord("q"):
+            break
+
+    cv2.destroyAllWindows()
+
+    # Optional export of coordinates
     if args.export_coords:
-        with open(args.export_coords, 'w', encoding='utf-8') as of:
-            json.dump({'coordinates': coords}, of, indent=4)
+        with open(args.export_coords, "w", encoding="utf-8") as of:
+            json.dump({"coordinates": coords}, of, indent=4)
         print(f"2D coordinates exported to {args.export_coords}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

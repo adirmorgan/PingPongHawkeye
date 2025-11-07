@@ -4,31 +4,81 @@ from typing import List, Tuple
 import numpy as np
 import time
 from functools import wraps
+# utils.py
 
 import time
+import threading
 from functools import wraps
 
-class timeit:
-    def __init__(self, label=None):
-        self.label = label or "Block"
+# נשלט מהטופ:
+TIMING_ENABLED = True
 
-    # as context manager
+def timing(enable: bool = True) -> None:
+    """Global switch for timeit (set from config)."""
+    global TIMING_ENABLED
+    TIMING_ENABLED = bool(enable)
+
+
+class timeit:
+
+    # thread-local depth so each thread gets its own tree
+    _state = threading.local()
+
+    @classmethod
+    def _get_depth(cls) -> int:
+        return getattr(cls._state, "depth", 0)
+
+    @classmethod
+    def _set_depth(cls, value: int) -> None:
+        cls._state.depth = max(0, value)
+
+    @classmethod
+    def _push(cls) -> None:
+        cls._set_depth(cls._get_depth() + 1)
+
+    @classmethod
+    def _pop(cls) -> None:
+        cls._set_depth(cls._get_depth() - 1)
+
+    def __init__(self, label=None):
+        self.label = label
+        self._start = None
+        self._enabled_snapshot = None
+        self._used = False
+
+    # ==== context manager: with timeit("...") ====
     def __enter__(self):
-        self._start = time.perf_counter()
+
+        self._enabled_snapshot = bool(TIMING_ENABLED)
+        if self._enabled_snapshot:
+            self._used = True
+            type(self)._push()
+            self._start = time.perf_counter()
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        end = time.perf_counter()
-        print(f"{self.label} took {end - self._start:.6f} seconds")
+        if self._used:
+            depth_for_print = type(self)._get_depth() - 1  # העומק של הבלוק הזה
+            if self._enabled_snapshot and self._start is not None:
+                elapsed = time.perf_counter() - self._start
+                indent = "\t" * max(depth_for_print, 0)
+                label = self.label or "Block"
+                print(f"{indent}{label} took {elapsed:.6f} seconds")
+            type(self)._pop()
+        return False
 
-    # as decorator
+    # ==== decorator: @timeit("...") or @timeit ====
     def __call__(self, func):
-        label = self.label or func.__name__
+        outer_label = self.label
 
         @wraps(func)
         def wrapper(*args, **kwargs):
+            if not TIMING_ENABLED:
+                return func(*args, **kwargs)
+            label = outer_label or func.__name__
             with timeit(label):
                 return func(*args, **kwargs)
+
         return wrapper
 
 def Contours(frames: np.ndarray, frame_index: int, cfg: dict) -> List[Tuple[np.ndarray, int]]:

@@ -1,10 +1,15 @@
 import json
 import argparse
+from itertools import combinations
+
 import numpy as np
 import cv2  # Replacing cv2.sfm import
 
 from Combine import TOP_2D
 from utils import *
+
+COORD_2D = 0 # index of field "coordinate" returned by TOP_2D
+SCORE_2D = 1 # index of field "score" returned by TOP_2D
 
 def build_projection_matrices(cameras_file):
     """
@@ -37,28 +42,65 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
     phys_cfg = full_cfg['PhysicalPosition']
     cameras_file = phys_cfg.get('cameras_file')
     P_list = build_projection_matrices(cameras_file)
+    n_cameras = len(all_frames)
 
-    # Get corresponding 2D points from all camera frames
-    pts2d = [TOP_2D(frames, frame_index, full_cfg=full_cfg)[0] for frames in all_frames]
+    if n_cameras < 2:
+        print(f"Not enough cameras to triangulate. Found {n_cameras} cameras.")
+        exit(1)
 
-    # TODO: choose cameras-pair wisely (sensor merging)
-    cam1 = 0  # arbitrary choice, not a wise one...
-    cam2 = 1  # arbitrary choice, not a wise one...
+    # Get corresponding 2D points and scores from all camera frames
+    '''NOTE:  TOP_2D returns a list of tuples (coordinate, score) for each camera.'''
+    res2d = [TOP_2D(frames, frame_index, full_cfg=full_cfg) for frames in all_frames]
+    pts2d = [r[COORD_2D] for r in res2d] # point coordinates in  2D (pixel indecies)
+    scr2d =  [r[SCORE_2D] for r in res2d] # score of 2D detection
+    # Get corresponding 3D point of all pairs (triangulation in pairs)
+    pts3d = [[None for _ in range(n_cameras)] for _ in range(n_cameras)]
+    for cam1, cam2 in combinations(range(n_cameras), 2):
+        # Validate that at least two 2D points were found
+        if len(pts2d) < 2 or pts2d[cam1] is None or pts2d[cam2] is None:
+            return None
+    
+        # Prepare 2D points for triangulation
+        x1 = np.array(pts2d[cam1], dtype=float).reshape(2, 1)  # First camera
+        x2 = np.array(pts2d[cam2], dtype=float).reshape(2, 1)  # Second camera
+    
+        # Perform triangulation using cv2.triangulatePoints
+        X_hom = cv2.triangulatePoints(P_list[cam1], P_list[cam2], x1, x2)
+    
+        # Convert homogeneous coordinates to 3D coordinates
+        X_hom /= X_hom[3, 0] # Normalize
+        # Build the symetric matrix of triangulation results.
+        pt3d = toleround(
+            [float(X_hom[0, 0]), float(X_hom[1, 0]), float(X_hom[2, 0])],
+            phys_cfg['tolerance']
+        )
+        if np.linalg.norm(pt3d) > phys_cfg['max_distance']:
+            continue # result will be None
+        pts3d[cam1][cam2] = pt3d
+        pts3d[cam2][cam1] = pt3d
 
-    # Validate that at least two 2D points were found
-    if len(pts2d) < 2 or pts2d[cam1] is None or pts2d[cam2] is None:
-        return None
+    match phys_cfg['merge_method']:
+        case "majority":
+            pts3d_flat = [
+                pts3d[cam1][cam2]
+                for cam1, cam2 in combinations(range(n_cameras), 2)
+                if pts3d[cam1][cam2] is not None
+            ]
+            if not pts3d_flat:
+                return None  # no results were found
+            unique, counts = np.unique(pts3d_flat, axis=0, return_counts=True)
+            max_idx = np.argmax(counts)
+            best = unique[max_idx]
+            # return touple of floats.
+            return float(best[0]), float(best[1]), float(best[2])
+        case "average":
+            return None #TODO
+        case "score":
+            return None #TODO
+        case _:
+            print(f"Invalid merge method: {phys_cfg['merge_method']}")
+            exit(1)
 
-    # Prepare 2D points for triangulation
-    x1 = np.array(pts2d[cam1], dtype=float).reshape(2, 1)  # First camera
-    x2 = np.array(pts2d[cam2], dtype=float).reshape(2, 1)  # Second camera
-
-    # Perform triangulation using cv2.triangulatePoints
-    X_hom = cv2.triangulatePoints(P_list[cam1], P_list[cam2], x1, x2)
-
-    # Convert homogeneous coordinates to 3D coordinates
-    X_hom /= X_hom[3, 0]
-    return float(X_hom[0, 0]), float(X_hom[1, 0]), float(X_hom[2, 0])
 
 
 def main():
@@ -84,8 +126,9 @@ def main():
         with timeit(f"Frame {frame_idx} of {n_frames}"):
             point3d = TOP_3D(all_frames, frame_idx, full_cfg)
             entry = {'t': frame_idx / fps, 'x': None, 'y': None, 'z': None}
-            if point3d:
-                entry.update({'x': point3d[0], 'y': point3d[1], 'z': point3d[2]})
+            if point3d is not None:
+                x, y, z = point3d
+                entry.update({'x': float(x), 'y': float(y), 'z': float(z)})
             trajectory.append(entry)
 
     with open(out_path, 'w') as f:

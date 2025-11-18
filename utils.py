@@ -328,7 +328,19 @@ if __name__ == '__main__':
     )
     browse_npy_file("C:\\Users\\elad2\\Downloads\\tryinnn.npy")
 
+def toleround(x, tolerance):
+    """
+    Round a number or a list of numbers to the nearest multiple of `tolerance`.
+    """
+    def _round_one(num: float) -> float:
+        return round(num / tolerance) * tolerance
 
+    # If it's a list (or tuple), round element-wise
+    if isinstance(x, (list, tuple)):
+        return [_round_one(n) for n in x]
+    else:
+        # Scalar case
+        return _round_one(x)
 
 
 

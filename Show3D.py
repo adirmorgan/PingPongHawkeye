@@ -3,6 +3,8 @@ import argparse
 import matplotlib.pyplot as plt
 from utils import *
 
+# TODO : calibration of axis must be re-done, we got a slanted line of hits with the ground instead of
+#  hitting the ground always in the same height (the floor is not slanted as far as we know)
 def plot_trajectory(coords, config):
     """
     Plot x, y, z vs time and save to file.

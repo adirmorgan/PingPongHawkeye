@@ -74,13 +74,16 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
             [float(X_hom[0, 0]), float(X_hom[1, 0]), float(X_hom[2, 0])],
             phys_cfg['tolerance']
         )
+        # TODO : (optional) this kind of results could be filtered earlier on 2D level...
         if np.linalg.norm(pt3d) > phys_cfg['max_distance']:
             continue # result will be None
         pts3d[cam1][cam2] = pt3d
         pts3d[cam2][cam1] = pt3d
-
+    # TODO: split into functions and call each one if relevant.
     match phys_cfg['merge_method']:
-        case "majority":
+        case ["select ", cam1, cam2]: # no merging, pre-selected cameras
+            return pts3d[int(cam1)][int(cam2)]
+        case "majority": # merge according to majority of votes after rounding
             pts3d_flat = [
                 pts3d[cam1][cam2]
                 for cam1, cam2 in combinations(range(n_cameras), 2)
@@ -94,9 +97,9 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
             # return touple of floats.
             return float(best[0]), float(best[1]), float(best[2])
         case "average":
-            return None #TODO
+            return None #TODO : implement this merging method
         case "score":
-            return None #TODO
+            return None #TODO : implement this merging method
         case _:
             print(f"Invalid merge method: {phys_cfg['merge_method']}")
             exit(1)

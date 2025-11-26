@@ -11,21 +11,56 @@ from utils import *
 COORD_2D = 0 # index of field "coordinate" returned by TOP_2D
 SCORE_2D = 1 # index of field "score" returned by TOP_2D
 
+
 def build_projection_matrices(cameras_file):
     """
-    Given camera parameters in cameras_file, build each camera's projection matrix P = K [R | t].
+    Builds P = K[R|t] handling both Position conversion AND Coordinate System conversion.
     """
     P_list = []
     cams = json.load(open(cameras_file, 'r'))
-    for cam in cams:
+
+    # --- מטריצת התיקון (Magic Matrix) ---
+    # הופכת את Y ואת Z.
+    # נדרש כמעט תמיד במעבר מ-Unity/Blender ל-OpenCV
+    fix_axes = np.array([
+        [1, 0, 0],
+        [0, -1, 0],
+        [0, 0, -1]
+    ], dtype=float)
+
+    for i, cam in enumerate(cams):
         K = np.array(cam['K'], dtype=float)
         rvec = np.array(cam['rvec'], dtype=float).reshape(3, 1)
-        tvec = np.array(cam['tvec'], dtype=float).reshape(3, 1)
-        R, _ = cv2.Rodrigues(rvec)  # Convert rotation vector to rotation matrix
-        Rt = np.hstack((R, tvec))  # Concatenate R and t (extrinsics)
-        P = K @ Rt  # Projection matrix
+        C = np.array(cam['tvec'], dtype=float).reshape(3, 1)  # Camera Position
+
+        # 1. המרת וקטור סיבוב למטריצה
+        R_sim, _ = cv2.Rodrigues(rvec)
+
+        # 2. --- התיקון החדש: התאמת מערכת צירים ---
+        # אנחנו מכפילים מימין כדי לסובב את מערכת הצירים של המצלמה עצמה
+        R_cv = R_sim @ fix_axes
+
+        # 3. חישוב וקטור ההזזה (שימוש ב-R המתוקן!)
+        t_vec = -R_cv @ C
+
+        # 4. בניית P
+        Rt = np.hstack((R_cv, t_vec))
+        P = K @ Rt
+
         P_list.append(P)
+
+        # הדפסת בדיקה
+        verify_camera_center(P, C, i)
+
     return P_list
+
+
+def verify_camera_center(P, C_original, cam_index):
+    C_hom = np.append(C_original, [[1]], axis=0)
+    projected = P @ C_hom
+    error = np.linalg.norm(projected)
+    if error > 1e-3:
+        print(f"⚠️ Cam {cam_index}: Center projection error is {error:.5f} (Should be ~0)")
 
 def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tuple[float, float, float] | None:
     """
@@ -39,6 +74,9 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
     Returns:
         (x, y, z) or None
     """
+    # DEBUG:
+    print(f"frame index: {frame_index}")
+    # ENDEBUG
     phys_cfg = full_cfg['PhysicalPosition']
     cameras_file = phys_cfg.get('cameras_file')
     P_list = build_projection_matrices(cameras_file)
@@ -50,7 +88,9 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
 
     # Get corresponding 2D points and scores from all camera frames
     '''NOTE:  TOP_2D returns a list of tuples (coordinate, score) for each camera.'''
-    res2d = [TOP_2D(frames, frame_index, full_cfg=full_cfg) for frames in all_frames]
+
+    res2d = [TOP_2D(all_frames[cam], frame_index, full_cfg=full_cfg) for cam in range(len(all_frames))]
+
     pts2d = [r[COORD_2D] for r in res2d] # point coordinates in  2D (pixel indecies)
     scr2d =  [r[SCORE_2D] for r in res2d] # score of 2D detection
     # Get corresponding 3D point of all pairs (triangulation in pairs)
@@ -58,7 +98,7 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
     for cam1, cam2 in combinations(range(n_cameras), 2):
         # Validate that at least two 2D points were found
         if len(pts2d) < 2 or pts2d[cam1] is None or pts2d[cam2] is None:
-            return None
+            continue
     
         # Prepare 2D points for triangulation
         x1 = np.array(pts2d[cam1], dtype=float).reshape(2, 1)  # First camera
@@ -81,7 +121,7 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
         pts3d[cam2][cam1] = pt3d
     # TODO: split into functions and call each one if relevant.
     match phys_cfg['merge_method']:
-        case ["select ", cam1, cam2]: # no merging, pre-selected cameras
+        case ["select", cam1, cam2]: # no merging, pre-selected cameras
             return pts3d[int(cam1)][int(cam2)]
         case "majority": # merge according to majority of votes after rounding
             pts3d_flat = [
@@ -94,15 +134,19 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
             unique, counts = np.unique(pts3d_flat, axis=0, return_counts=True)
             max_idx = np.argmax(counts)
             best = unique[max_idx]
-            # return touple of floats.
+            # return tuple of floats.
             return float(best[0]), float(best[1]), float(best[2])
         case "average":
             return None #TODO : implement this merging method
         case "score":
             return None #TODO : implement this merging method
-        case _:
-            print(f"Invalid merge method: {phys_cfg['merge_method']}")
-            exit(1)
+        case _: # do not merge, just print all trajectories simult.
+            for c1 in range(n_cameras):
+                for c2 in range(c1 + 1, n_cameras):
+                    if pts3d[c1][c2] is not None:
+                        print(f"Frame {frame_index}: Cam {c1}&{c2} -> {pts3d[c1][c2]}")
+            return None
+
 
 
 

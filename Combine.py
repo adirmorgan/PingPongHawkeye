@@ -102,7 +102,7 @@ def TOP_2D(frames: np.ndarray,
             best_contour = contour
 
     best_coord = get_coordinates(best_contour) if best_contour is not None else None
-    return best_coord, scored
+    return best_coord, best_score
 
 
 def main():

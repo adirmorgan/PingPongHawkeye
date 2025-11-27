@@ -7,6 +7,11 @@ from utils import *
 # TODO : motion detection gives too small scores... probably not normalized correctly
 #  maybe something with the proximity calculation...
 
+# TODO : kstep takes too much time... major bottleneck of our entire program!
+#   probably due to making the musk of the entire frame, again and again per each contour...
+#   sol1 - make musk per contour.
+#   sol2 - make musk for the entire frame only for the first contour, and reuse it for later contours
+
 def compute_kstep_motion(frames: np.ndarray,
                          frame_index: int,
                          k: int,
@@ -72,78 +77,82 @@ def compute_background_model(frames: np.ndarray,
 def Motion_Detection(frames: np.ndarray,
                      frame_index: int,
                      contour: np.ndarray,
-                     cfg: dict) -> float:
-    """
-    Compute a proximity-weighted motion score for a contour.
+                         cfg: dict) -> float:
+        """
+        Compute a proximity-weighted motion score for a contour.
 
-    cfg keys:
-      - "method": "kstep" or "background"
-      - "motion_k": int
-      - "motion_threshold": float
-      - "background_learning_rate": float
-      - "background_threshold": float
-      - "proximity_sigma": float
-      - "shadow_weight": float in [0,1], how much to trust darkening (shadows)
-    """
-    method = cfg.get("method", "kstep")
-    shadow_weight = float(cfg.get("shadow_weight", 0.3))
+        cfg keys:
+          - "method": "kstep" or "background"
+          - "motion_k": int
+          - "motion_threshold": float
+          - "background_learning_rate": float
+          - "background_threshold": float
+          - "proximity_sigma": float
+          - "shadow_weight": float in [0,1], how much to trust darkening (shadows)
+        """
+        with timeit("first"):
+            method = cfg.get("method", "kstep")
+            shadow_weight = float(cfg.get("shadow_weight", 0.3))
 
-    if method == "kstep":
-        k = int(cfg.get("motion_k", 5))
-        thr = float(cfg.get("motion_threshold", 25.0))
-        mask, motion_strength = compute_kstep_motion(frames, frame_index, k, thr, shadow_weight)
+        with timeit("middle"):
+            if method == "kstep":
+                k = int(cfg.get("motion_k", 5))
+                thr = float(cfg.get("motion_threshold", 25.0))
+                mask, motion_strength = compute_kstep_motion(frames, frame_index, k, thr, shadow_weight)
 
-    elif method == "background":
-        lr = float(cfg.get("background_learning_rate", 0.01))
-        thr = float(cfg.get("background_threshold", 30.0))
-        bg = compute_background_model(frames, frame_index, lr)
+            elif method == "background":
+                lr = float(cfg.get("background_learning_rate", 0.01))
+                thr = float(cfg.get("background_threshold", 30.0))
+                bg = compute_background_model(frames, frame_index, lr)
 
-        diff = cv2.absdiff(frames[frame_index], bg)
-        b, g, r = cv2.split(diff)
-        _, mb = cv2.threshold(b, thr, 255, cv2.THRESH_BINARY)
-        _, mg = cv2.threshold(g, thr, 255, cv2.THRESH_BINARY)
-        _, mr = cv2.threshold(r, thr, 255, cv2.THRESH_BINARY)
-        mask = cv2.bitwise_or(cv2.bitwise_or(mb, mg), mr)
+                diff = cv2.absdiff(frames[frame_index], bg)
+                b, g, r = cv2.split(diff)
+                _, mb = cv2.threshold(b, thr, 255, cv2.THRESH_BINARY)
+                _, mg = cv2.threshold(g, thr, 255, cv2.THRESH_BINARY)
+                _, mr = cv2.threshold(r, thr, 255, cv2.THRESH_BINARY)
+                mask = cv2.bitwise_or(cv2.bitwise_or(mb, mg), mr)
 
-        # For background mode: simple normalized magnitude as motion_strength
-        gray_diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY).astype(np.float32)
-        max_val = gray_diff.max()
-        if max_val > 0:
-            motion_strength = (gray_diff / max_val).astype(np.float32)
-        else:
-            motion_strength = np.zeros_like(gray_diff, dtype=np.float32)
+                # For background mode: simple normalized magnitude as motion_strength
+                gray_diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY).astype(np.float32)
+                max_val = gray_diff.max()
+                if max_val > 0:
+                    motion_strength = (gray_diff / max_val).astype(np.float32)
+                else:
+                    motion_strength = np.zeros_like(gray_diff, dtype=np.float32)
 
-    else:
-        print("Error: method value is invalid")
-        return 0.0
+            else:
+                print("Error: method value is invalid")
+                return 0.0
 
-    # Region mask for this contour
-    region = np.zeros_like(mask, dtype=np.uint8)
-    cv2.drawContours(region, [contour], -1, 255, thickness=cv2.FILLED)
+        with timeit("last"):# DEBUG
+            # Region mask for this contour
+            region = np.zeros_like(mask, dtype=np.uint8)
+            cv2.drawContours(region, [contour], -1, 255, thickness=cv2.FILLED)
 
-    ys, xs = np.where(region == 255)
-    if ys.size == 0:
-        return 0.0
+            ys, xs = np.where(region == 255)
+            if ys.size == 0:
+                return 0.0
 
-    # Contour centroid
-    moments = cv2.moments(contour)
-    if moments.get("m00", 0) == 0:
-        return 0.0
-    cx = moments["m10"] / moments["m00"]
-    cy = moments["m01"] / moments["m00"]
+            # Contour centroid
+            moments = cv2.moments(contour)
+            if moments.get("m00", 0) == 0:
+                return 0.0
+            cx = moments["m10"] / moments["m00"]
+            cy = moments["m01"] / moments["m00"]
 
-    # Proximity weighting
-    sigma = float(cfg.get("proximity_sigma", 10.0))
-    d2 = (xs - cx) ** 2 + (ys - cy) ** 2
-    weights = np.exp(-d2 / (2.0 * sigma ** 2))
+            # Proximity weighting
+            sigma = float(cfg.get("proximity_sigma", 10.0))
+            d2 = (xs - cx) ** 2 + (ys - cy) ** 2
+            weights = np.exp(-d2 / (2.0 * sigma ** 2))
+            weights /= weights.sum() #  Normalize weights
 
-    # Sample continuous motion strength inside contour
-    mvals = motion_strength[ys, xs]  # already in [0,1]
+            # Sample continuous motion strength inside contour
+            mvals = motion_strength[ys, xs]  # already in [0,1]
 
-    # Weighted average motion score
-    weighted_sum = np.sum(weights * mvals)
-    weight_total = np.sum(weights)
-    return float(weighted_sum / weight_total) if weight_total > 0 else 0.0
+            # Weighted average motion score
+            weighted_sum = np.sum(weights * mvals)
+            weight_total = np.sum(weights)
+            return float(weighted_sum / weight_total) if weight_total > 0 else 0.0
 
 def main():
     parser = argparse.ArgumentParser(description="Motion detection with proximity-weighted scoring")

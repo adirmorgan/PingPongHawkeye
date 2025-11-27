@@ -2,15 +2,12 @@ import json
 from BallDetection.ShapeDetection import preprocess_mask
 from typing import List, Tuple
 import numpy as np
-import time
-from functools import wraps
-# utils.py
 
 import time
 import threading
 from functools import wraps
 
-# נשלט מהטופ:
+# controled by the top module (it's main should call the function "timing")
 TIMING_ENABLED = True
 
 def timing(enable: bool = True) -> None:
@@ -63,7 +60,7 @@ class timeit:
                 elapsed = time.perf_counter() - self._start
                 indent = "\t" * max(depth_for_print, 0)
                 label = self.label or "Block"
-                print(f"{indent}{label} took {elapsed:.6f} seconds")
+                printGreen(f"{indent}{label} took {elapsed:.6f} seconds")
             type(self)._pop()
         return False
 
@@ -80,6 +77,7 @@ class timeit:
                 return func(*args, **kwargs)
 
         return wrapper
+def printGreen(s): print("\033[92m {}\033[00m".format(s))
 
 def Contours(frames: np.ndarray, frame_index: int, cfg: dict) -> List[Tuple[np.ndarray, int]]:
     """

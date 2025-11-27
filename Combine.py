@@ -77,32 +77,36 @@ def TOP_2D(frames: np.ndarray,
         strategy = combine_cfg.get("strategy", "gather")
 
     best_score = min_score
+    best_s_score, best_c_score, best_m_score = 0.0, 0.0, 0.0
     best_contour = None
-    scored: list[tuple[np.ndarray, float, float, float, float]] = []
 
     with timeit("Contours"):
         # Contours() is expected to use frames[frame_index] internally with shape config
         contours = Contours(frames, frame_index, shape_cfg)
 
-    for contour, _ in contours:
-        with timeit("Shape Detection"):
-            s_score = float(ShapeDetection.Shape_Detection(frames, frame_index, contour, shape_cfg))
-        with timeit("Color Detection"):
-            c_score = float(ColorDetection.Color_Detection(frames, frame_index, contour, color_cfg))
-        with timeit("Motion Detection"):
-            m_score = float(MotionDetection.Motion_Detection(frames, frame_index, contour, motion_cfg))
+    for idx, (contour, _) in enumerate(contours):
+        with timeit(f"Contour {idx}"):
+            with timeit("Shape Detection"):
+                s_score = float(ShapeDetection.Shape_Detection(frames, frame_index, contour, shape_cfg))
+            with timeit("Color Detection"):
+                c_score = float(ColorDetection.Color_Detection(frames, frame_index, contour, color_cfg))
+            with timeit("Motion Detection"):
+                m_score = float(MotionDetection.Motion_Detection(frames, frame_index, contour, motion_cfg))
 
-        with timeit("Combining scores"):
-            combined_score = combine_scores(strategy, s_score, c_score, m_score, s_w, c_w, m_w)
+            with timeit("Combining scores"):
+                combined_score = combine_scores(strategy, s_score, c_score, m_score, s_w, c_w, m_w)
 
-        scored.append((contour, combined_score, s_score, c_score, m_score))
-
-        if combined_score > best_score:
-            best_score = combined_score
-            best_contour = contour
+            if combined_score > best_score:
+                best_s_score = s_score
+                best_c_score = c_score
+                best_m_score = m_score
+                best_score = combined_score
+                best_contour = contour
 
     best_coord = get_coordinates(best_contour) if best_contour is not None else None
-    return best_coord, best_score
+    if best_coord is None: best_score = 0.0
+
+    return best_coord, best_score, best_contour, best_s_score, best_c_score, best_m_score
 
 
 def main():
@@ -133,8 +137,6 @@ def main():
     # Visualization params
     window_name = combine_cfg.get("window_name", "combined_score Detection")
     delay = int(combine_cfg.get("display_fps_delay", 30))
-    min_score = float(combine_cfg.get("min_score", 0.0))
-    mark_best = bool(combine_cfg.get("mark_best", True))
     show_components = bool(combine_cfg.get("show_components", False))
 
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -145,35 +147,29 @@ def main():
         frame = frames[frame_idx]
         display = frame.copy()
 
-        best_coord, scored = TOP_2D(frames, frame_idx, full_cfg)
+        best_coord, combined_score, contour, s , c, m = TOP_2D(frames, frame_idx, full_cfg) # get prediction of 2D location of the object
         coords.append(best_coord)
 
-        # Draw all contours with combined_score score >= min_score
-        for contour, combined_score, s_score, c_score, m_score in scored:
-            if combined_score >= min_score:
-                x, y, w, h = cv2.boundingRect(contour)
-                cv2.rectangle(display, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        # mark the relevant contour
+        x, y, w, h = cv2.boundingRect(contour)
+        cv2.drawContours(display, [contour], -1, (0, 255, 0), 1)
 
-                if show_components:
-                    text = f"{combined_score:.2f} S:{s_score:.2f} C:{c_score:.2f} M:{m_score:.2f}"
-                else:
-                    text = f"{combined_score:.2f}"
+        # display scores
+        if show_components:
+            text = f"{combined_score:.2f} S:{s:.2f} C:{c:.2f} M:{m:.2f}"
+        else:
+            text = f"{combined_score:.2f}"
 
-                cv2.putText(
-                    display,
-                    text,
-                    (x, max(y - 5, 0)),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (0, 0, 255),
-                    1,
-                    cv2.LINE_AA,
-                )
-
-        # Optionally highlight best centroid
-        if mark_best and best_coord is not None:
-            cx, cy = int(best_coord[0]), int(best_coord[1])
-            cv2.circle(display, (cx, cy), 5, (255, 0, 0), -1)
+        cv2.putText(
+            display,
+            text,
+            (x, max(y - 5, 0)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (0, 255, 0),
+            1,
+            cv2.LINE_AA,
+        )
 
         # Optional per-frame logging
         if combine_cfg.get("print", False):

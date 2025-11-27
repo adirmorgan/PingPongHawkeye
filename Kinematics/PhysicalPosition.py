@@ -19,9 +19,7 @@ def build_projection_matrices(cameras_file):
     P_list = []
     cams = json.load(open(cameras_file, 'r'))
 
-    # --- מטריצת התיקון (Magic Matrix) ---
-    # הופכת את Y ואת Z.
-    # נדרש כמעט תמיד במעבר מ-Unity/Blender ל-OpenCV
+    # fixing the coordinate system
     fix_axes = np.array([
         [1, 0, 0],
         [0, -1, 0],
@@ -33,23 +31,23 @@ def build_projection_matrices(cameras_file):
         rvec = np.array(cam['rvec'], dtype=float).reshape(3, 1)
         C = np.array(cam['tvec'], dtype=float).reshape(3, 1)  # Camera Position
 
-        # 1. המרת וקטור סיבוב למטריצה
+        # convert rotation vector into a matrix
         R_sim, _ = cv2.Rodrigues(rvec)
 
-        # 2. --- התיקון החדש: התאמת מערכת צירים ---
-        # אנחנו מכפילים מימין כדי לסובב את מערכת הצירים של המצלמה עצמה
+        # adjust the coordinates system
+        # Rightside multiplication for rotation
         R_cv = R_sim @ fix_axes
 
-        # 3. חישוב וקטור ההזזה (שימוש ב-R המתוקן!)
+        # calculation of transformation vector
         t_vec = -R_cv @ C
 
-        # 4. בניית P
+        # building P
         Rt = np.hstack((R_cv, t_vec))
         P = K @ Rt
 
         P_list.append(P)
 
-        # הדפסת בדיקה
+        # verification
         verify_camera_center(P, C, i)
 
     return P_list
@@ -93,7 +91,9 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
 
     pts2d = [r[COORD_2D] for r in res2d] # point coordinates in  2D (pixel indecies)
     scr2d =  [r[SCORE_2D] for r in res2d] # score of 2D detection
-    # Get corresponding 3D point of all pairs (triangulation in pairs)
+
+    # Get corresponding 3D point and scores of all pairs (triangulation in pairs)
+    scr3d = [scr2d[cam1] + scr2d[cam2] for cam1, cam2 in combinations(range(n_cameras), 2)] # score of a pair is the sum of their scores
     pts3d = [[None for _ in range(n_cameras)] for _ in range(n_cameras)]
     for cam1, cam2 in combinations(range(n_cameras), 2):
         # Validate that at least two 2D points were found
@@ -114,21 +114,25 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
             [float(X_hom[0, 0]), float(X_hom[1, 0]), float(X_hom[2, 0])],
             phys_cfg['tolerance']
         )
-        # TODO : (optional) this kind of results could be filtered earlier on 2D level...
-        if np.linalg.norm(pt3d) > phys_cfg['max_distance']:
+        if np.linalg.norm(pt3d) > phys_cfg['max_distance']: # TODO : (optional) this kind of results could be filtered earlier on 2D level...
+
             continue # result will be None
         pts3d[cam1][cam2] = pt3d
         pts3d[cam2][cam1] = pt3d
-    # TODO: split into functions and call each one if relevant.
+
+        return merge_predictions(phys_cfg['merge_method'], pts3d, scr3d, n_cameras)
+
+def merge_predictions(method, pts3d, scr3d, ncam):
+    '''
+    NOTE: sometimes it is easier to use a vector (idx <-> pair) rather than a matrix (idx1, idx2 <->pair)
+    '''
+    scr3d_flat = [scr3d[cam1][cam2] for cam1, cam2 in combinations(range(n_cameras), 2)]
+    pts3d_flat = [pts3d[cam1][cam2] for cam1, cam2 in combinations(range(n_cameras), 2)]
+
     match phys_cfg['merge_method']:
         case ["select", cam1, cam2]: # no merging, pre-selected cameras
             return pts3d[int(cam1)][int(cam2)]
         case "majority": # merge according to majority of votes after rounding
-            pts3d_flat = [
-                pts3d[cam1][cam2]
-                for cam1, cam2 in combinations(range(n_cameras), 2)
-                if pts3d[cam1][cam2] is not None
-            ]
             if not pts3d_flat:
                 return None  # no results were found
             unique, counts = np.unique(pts3d_flat, axis=0, return_counts=True)
@@ -136,19 +140,22 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
             best = unique[max_idx]
             # return tuple of floats.
             return float(best[0]), float(best[1]), float(best[2])
-        case "average":
-            return None #TODO : implement this merging method
-        case "score":
-            return None #TODO : implement this merging method
-        case _: # do not merge, just print all trajectories simult.
-            for c1 in range(n_cameras):
-                for c2 in range(c1 + 1, n_cameras):
-                    if pts3d[c1][c2] is not None:
+        case "average": # average all results
+            sum_pts = np.array(pts3d_flat).sum(axis=0)
+            return sum_pts / len(pts3d_flat)
+        case "scores": # choose the pair with the highest sum of scores
+            best_score = 0
+            for pair, score in enumerate(scr3d_flat):
+                 if score > best_score:
+                     best_score = score
+                     best_pair = pair
+            return pts3d_flat[best_pair]
+        case _: # do not merge, just print all coordinates as you go
+            for cam1 in range(ncam):
+                for cam2 in range(cam1 + 1, ncam):
+                    if pts3d[cam1][cam2] is not None:
                         print(f"Frame {frame_index}: Cam {c1}&{c2} -> {pts3d[c1][c2]}")
             return None
-
-
-
 
 def main():
     parser = argparse.ArgumentParser(

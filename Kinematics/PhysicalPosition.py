@@ -154,6 +154,7 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
             continue # result will be None
         pts3d[cam1][cam2] = pt3d
         pts3d[cam2][cam1] = pt3d
+
     if not phys_cfg['merge_method']: # do not merge, just print all coordinates as you go
         print(f"\tFrame {frame_index}:")
         for cam1, cam2 in combinations(range(n_cameras), 2):
@@ -180,6 +181,7 @@ def main():
     # Load camera frames
     all_frames = [np.load(path) for path in npy_files]
     n_frames = all_frames[0].shape[0]
+    shape_frame = print(all_frames[0].shape)  # DEBUG
 
     trajectory = []
     for frame_idx in range(n_frames):

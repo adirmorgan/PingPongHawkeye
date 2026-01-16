@@ -209,7 +209,7 @@ def run_gui(full_cfg):
         out = []
         for cam_idx in range(len(all_frames)):
             frames = all_frames[cam_idx]
-            pt,_ = TOP_2D(frames, frame_idx, full_cfg)
+            pt = TOP_2D(frames, frame_idx, full_cfg)
             disp = frames[frame_idx].copy()
             if pt is not None:
                 cv2.rectangle(disp, (pt[0]-5,pt[1]-5),(pt[0]+5,pt[1]+5),(0,0,255),2)

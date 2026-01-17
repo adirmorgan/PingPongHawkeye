@@ -106,7 +106,7 @@ def TOP_2D(frames: np.ndarray,
     best_coord = get_coordinates(best_contour) if best_contour is not None else None
     if best_coord is None: best_score = 0.0
 
-    return best_coord, best_score, best_contour, best_s_score, best_c_score, best_m_score
+    return best_contour, best_coord, best_score, best_s_score, best_c_score, best_m_score
 
 
 def main():

@@ -1,59 +1,29 @@
 import argparse
 from itertools import combinations
 
-from Combine import TOP_2D
+from BallDetection.Combine import TOP_2D
 from utils import *
 
-COORD_2D = 0 # index of field "coordinate" returned by TOP_2D
-SCORE_2D = 1 # index of field "score" returned by TOP_2D
+CONTR_2D = 0 # index of field "contour" returned by TOP_2D
+COORD_2D = 1 # index of field "coordinate" returned by TOP_2D
+SCORE_2D = 2 # index of field "score" returned by TOP_2D
 
 def build_projection_matrices(cameras_file):
     """
-    Builds P = K[R|t] handling both Position conversion AND Coordinate System conversion.
+    Given camera parameters in cameras_file, build each camera's projection matrix P = K [R | t].
     """
     P_list = []
     cams = json.load(open(cameras_file, 'r'))
-
-    # fixing the coordinate system
-    fix_axes = np.array([
-        [-1, 0, 0],
-        [0, 1, 0],
-        [0, 0, 1]
-    ], dtype=float)
-
-    for i, cam in enumerate(cams):
+    for cam in cams:
         K = np.array(cam['K'], dtype=float)
         rvec = np.array(cam['rvec'], dtype=float).reshape(3, 1)
-        C = np.array(cam['tvec'], dtype=float).reshape(3, 1)  # Camera Position
-
-        # convert rotation vector into a matrix
-        R_sim, _ = cv2.Rodrigues(rvec)
-
-        # adjust the coordinates system
-        # Rightside multiplication for rotation
-        R_cv = R_sim @ fix_axes
-
-        # calculation of transformation vector
-        t_vec = -R_cv @ C
-
-        # building P
-        Rt = np.hstack((R_cv, t_vec))
-        P = K @ Rt
-
+        tvec = np.array(cam['tvec'], dtype=float).reshape(3, 1)
+        R, _ = cv2.Rodrigues(rvec)  # Convert rotation vector to rotation matrix
+        Rt = np.hstack((R, tvec))  # Concatenate R and t (extrinsics)
+        P = K @ Rt  # Projection matrix
         P_list.append(P)
-
-        # verification
-        verify_camera_center(P, C, i)
-
     return P_list
 
-
-def verify_camera_center(P, C_original, cam_index):
-    C_hom = np.append(C_original, [[1]], axis=0)
-    projected = P @ C_hom
-    error = np.linalg.norm(projected)
-    if error > 1e-3:
-        print(f"⚠️ Cam {cam_index}: Center projection error is {error:.5f} (Should be ~0)")
 
 def merge_predictions(method: str, pts3d, scr3d, nc :int) -> tuple[float, float, float] | None:
     '''
@@ -95,6 +65,10 @@ def merge_predictions(method: str, pts3d, scr3d, nc :int) -> tuple[float, float,
                      best_score = score
                      best_pair = pair
             return pts3d_flat[best_pair]
+        case "weighted":
+            sum_pts = np.array(pts3d_flat) * np.array(scr3d_flat)[:, None]
+            sum_scr = np.array(scr3d_flat).sum()
+            return sum_pts / sum_scr
         case _:
             raise ValueError(f"Unknown merge method: {method}")
 
@@ -127,11 +101,15 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
     pts2d = [r[COORD_2D] for r in res2d] # point coordinates in  2D (pixel indecies)
     scr2d =  [r[SCORE_2D] for r in res2d] # score of 2D detection
 
+    if (full_cfg['printing']):
+        print(f"\t2D Results of Frame {frame_index}:")
+        for cam in range(n_cameras):
+            print(f"\t\tCamera {cam} : {pts2d[cam]}")
     # Get corresponding 3D point and scores of all pairs (triangulation in pairs)
-    scr3d = [[scr2d[cam1] + scr2d[cam2] for cam1 in range(n_cameras)] for cam2 in range(n_cameras)] # score of a pair is the sum of their scores
+    scr3d = [[np.sqrt(scr2d[cam1] * scr2d[cam2]) for cam1 in range(n_cameras)] for cam2 in range(n_cameras)] # score of a pair is the geometric mean
     pts3d = [[None for _ in range(n_cameras)] for _ in range(n_cameras)]
     for cam1, cam2 in combinations(range(n_cameras), 2):
-        # Validate that at least two 2D points were found
+        # Valindate that at least two 2D points were found
         if len(pts2d) < 2 or pts2d[cam1] is None or pts2d[cam2] is None:
             continue
     
@@ -155,11 +133,11 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
         pts3d[cam1][cam2] = pt3d
         pts3d[cam2][cam1] = pt3d
 
-    if not phys_cfg['merge_method']: # do not merge, just print all coordinates as you go
-        print(f"\tFrame {frame_index}:")
+    if (not phys_cfg['merge_method'] or full_cfg['printing']): # do not merge, just print all coordinates as you go
+        print(f"\t3D Results of Frame {frame_index}:")
         for cam1, cam2 in combinations(range(n_cameras), 2):
             print(f"\t\tCameras {cam1} & {cam2} : {pts3d[cam1][cam2]}")
-        return None
+        if not phys_cfg['merge_method'] : return None
 
     return merge_predictions(phys_cfg['merge_method'], pts3d, scr3d, n_cameras)
 

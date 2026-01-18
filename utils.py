@@ -1,4 +1,6 @@
 import json
+from itertools import combinations
+
 from BallDetection.ShapeDetection import preprocess_mask
 from typing import List, Tuple
 import numpy as np
@@ -339,6 +341,28 @@ def toleround(x, tolerance):
     else:
         # Scalar case
         return _round_one(x)
+def save_pairs_trajectories(points : np.ndarray[any, np.dtype[tuple[float, float, float]]], paths, frame_index, n_cameras, fps):
+    if points is None:
+        return
+    if len(paths) != n_cameras * (n_cameras - 1) / 2:
+        raise ValueError(f"Expected {n_cameras * (n_cameras - 1) / 2} paths, got {len(paths)}")
+    if points.shape[0] != n_cameras or points.shape[1] != n_cameras:
+        raise ValueError(f"Expected points to be a {n_cameras}x{n_cameras} array, got {points.shape}")
 
+    '''
+    NOTE: order of paths must be like the order of the cam1,cam2 in combinations
+    '''
 
+    with timeit("Saving pairs trajectories"):
+        trajectory = []
+        for idx,(cam1,cam2) in enumerate(combinations(range(n_cameras),2)):
+            path = paths[idx]
+            p = points[cam1, cam2]
+            entry = {'t': frame_index / fps, 'x': None, 'y': None, 'z': None}
+            if p is not None:
+                x, y, z = p
+                entry.update({'x': float(x), 'y': float(y), 'z': float(z)})
+            trajectory.append(entry)
+        with open(path, 'w') as f:
+            json.dump(trajectory, f, indent=4)
 

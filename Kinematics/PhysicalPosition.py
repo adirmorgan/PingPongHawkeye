@@ -66,13 +66,17 @@ def merge_predictions(method: str, pts3d, scr3d, nc :int) -> tuple[float, float,
                      best_pair = pair
             return pts3d_flat[best_pair]
         case "weighted":
-            sum_pts = np.array(pts3d_flat) * np.array(scr3d_flat)[:, None]
+            sum_pts =  0.0
+            for pt in pts3d_flat:
+                if pt is None : continue
+                sum_pts += np.array(pt) * scr3d_flat[pts3d_flat.index(pt)]
             sum_scr = np.array(scr3d_flat).sum()
+            if sum_scr == 0.0: return None
             return sum_pts / sum_scr
         case _:
             raise ValueError(f"Unknown merge method: {method}")
 
-def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tuple[float, float, float] | None:
+def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tuple[float, float, float] | None | np.array(tuple[float, float, float], dtype=object):
     """
     Triangulate a 3D point from multiple camera frames at a single time instant.
 
@@ -133,16 +137,19 @@ def TOP_3D(all_frames: list[np.ndarray], frame_index:int ,full_cfg: dict) -> tup
         pts3d[cam1][cam2] = pt3d
         pts3d[cam2][cam1] = pt3d
 
-    if (not phys_cfg['merge_method'] or full_cfg['printing']): # do not merge, just print all coordinates as you go
+    if (full_cfg['printing']): # do not merge, just print all coordinates as you go
         print(f"\t3D Results of Frame {frame_index}:")
         for cam1, cam2 in combinations(range(n_cameras), 2):
             print(f"\t\tCameras {cam1} & {cam2} : {pts3d[cam1][cam2]}")
-        if not phys_cfg['merge_method'] : return None
+    if not phys_cfg['merge_method'] : np.array(pts3d)
 
+    if (phys_cfg['save_pairs']):
+        save_pairs_trajectories(np.array(pts3d,dtype = object),
+                                phys_cfg["pairs_trajectories"], frame_index, n_cameras, phys_cfg['frame_rate'])
     return merge_predictions(phys_cfg['merge_method'], pts3d, scr3d, n_cameras)
 
 @ timeit("main (3D)")
-def main():
+def main_auto():
     parser = argparse.ArgumentParser(
         description="Compute 3D trajectory by looping over frames and triangulating per-instant"
     )
@@ -159,20 +166,21 @@ def main():
     # Load camera frames
     all_frames = [np.load(path) for path in npy_files]
     n_frames = all_frames[0].shape[0]
-    shape_frame = print(all_frames[0].shape)  # DEBUG
 
     trajectory = []
     for frame_idx in range(n_frames):
         with timeit(f"Frame {frame_idx} of {n_frames}"):
             point3d = TOP_3D(all_frames, frame_idx, full_cfg)
-            entry = {'t': frame_idx / fps, 'x': None, 'y': None, 'z': None}
-            if point3d is not None:
-                x, y, z = point3d
-                entry.update({'x': float(x), 'y': float(y), 'z': float(z)})
-            trajectory.append(entry)
+            if phys_cfg['merge_method']: # otherwise - not writing the merged result to the output trajectory file...
+                entry = {'t': frame_idx / fps, 'x': None, 'y': None, 'z': None}
+                if point3d is not None:
+                    x, y, z = point3d
+                    entry.update({'x': float(x), 'y': float(y), 'z': float(z)})
+                trajectory.append(entry)
 
-    with open(out_path, 'w') as f:
-        json.dump(trajectory, f, indent=4)
+    with timeit("Saving output trajectory"):
+        with open(out_path, 'w') as f:
+            json.dump(trajectory, f, indent=4)
     print(f"3D trajectory saved to {out_path}")
 
 def run_gui(full_cfg):
@@ -229,6 +237,6 @@ if __name__ == '__main__':
     if choice == 'G' or choice == 'g':
         main_gui()
     elif choice == 'A' or choice == 'a':
-        main()
+        main_auto()
     else:
         print("Invalid choice. Exiting.")

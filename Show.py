@@ -67,21 +67,28 @@ def main():
     with open(args.config, 'r', encoding='utf-8') as f:
         full_cfg = json.load(f)
     cfg = full_cfg['show']
-
+    if (len(cfg['import_coords'])==0):
+        raise ValueError("No coordinates files found in config")
+    if (cfg['video_npy'] is None):
+        raise ValueError("No video npy file found in config")
+    if (len(cfg['import_coords'])!=len(cfg['video_npy'])):
+        raise ValueError("Number of coordinates files does not match number of videos")
     # load coordinates
-    coords_path = cfg['coordinates_file']
-    with open(coords_path, 'r', encoding='utf-8') as cf:
-        data = json.load(cf)
-    coordinates = data['coordinates']
+    coords_paths = cfg['import_coords']
+    for i in len(coords_paths):
+        coords_path = coords_paths[i]
+        with open(coords_path, 'r', encoding='utf-8') as cf:
+            data = json.load(cf)
+        coordinates = data['coordinates']
 
-    # load frames
-    frames = np.load(cfg['video_npy'])
+        # load frames
+        frames = np.load(cfg['video_npy'])[i]
 
-    # plot trajectories
-    plot_trajectory(coordinates, cfg)
+        # plot trajectories
+        plot_trajectory(coordinates, cfg)
 
-    # overlay tracking on video
-    overlay_tracking(frames, coordinates, cfg)
+        # overlay tracking on video
+        overlay_tracking(frames, coordinates, cfg)
 
     # optional re-export full config
     if args.export_config:

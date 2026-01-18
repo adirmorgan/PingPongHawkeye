@@ -3,9 +3,7 @@ import argparse
 import matplotlib.pyplot as plt
 from utils import *
 
-# TODO : calibration of axis must be re-done, we got a slanted line of hits with the ground instead of
-#  hitting the ground always in the same height (the floor is not slanted as far as we know)
-def plot_trajectory(coords, config):
+def plot_trajectory(coords,  export_path):
     """
     Plot x, y, z vs time and save to file.
     """
@@ -29,7 +27,6 @@ def plot_trajectory(coords, config):
     axes[2].set_title('Z vs Time')
 
     plt.tight_layout()
-    export_path = config.get('export_plot')
     if export_path:
         plt.savefig(export_path)
     else:
@@ -47,13 +44,23 @@ def main():
         full_cfg = json.load(cf)
     show_cfg = full_cfg.get('show', {})
 
-    # load coordinates
-    coords_file = show_cfg.get('coordinates_file')
-    with open(coords_file, 'r', encoding='utf-8') as jf:
-        coords = json.load(jf)
+    # check configuration
+    if not show_cfg:
+        raise ValueError("No 'show' section found in config")
+    if not show_cfg.get('export_plots'):
+        raise ValueError("No 'export_plots' found in 'show' section")
+    if not show_cfg.get('coordinates_file'):
+        raise ValueError("No 'coordinates_file' found in 'show' section")
+    if len(show_cfg['export_plots'])!=len(show_cfg['coordinates_file']):
+        raise ValueError("Number of 'export_plots' does not match number of 'coordinates_file'")
 
     # plot trajectory
-    plot_trajectory(coords, show_cfg)
+    for i,export_path in enumerate(show_cfg['export_plots']):
+        # load coordinates
+        coords_file = show_cfg['coordinates_file'][i]
+        with open(coords_file, 'r', encoding='utf-8') as jf:
+            coords = json.load(jf)
+        plot_trajectory(coords, export_path)
 
     # optional re-export config
     if args.export_config:

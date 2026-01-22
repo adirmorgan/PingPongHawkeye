@@ -49,15 +49,15 @@ def main():
         raise ValueError("No 'show' section found in config")
     if not show_cfg.get('export_plots'):
         raise ValueError("No 'export_plots' found in 'show' section")
-    if not show_cfg.get('coordinates_file'):
+    if not show_cfg.get('import_coords'):
         raise ValueError("No 'coordinates_file' found in 'show' section")
-    if len(show_cfg['export_plots'])!=len(show_cfg['coordinates_file']):
+    if len(show_cfg['export_plots'])!=len(show_cfg['import_coords']):
         raise ValueError("Number of 'export_plots' does not match number of 'coordinates_file'")
 
     # plot trajectory
     for i,export_path in enumerate(show_cfg['export_plots']):
         # load coordinates
-        coords_file = show_cfg['coordinates_file'][i]
+        coords_file = show_cfg['import_coords'][i]
         with open(coords_file, 'r', encoding='utf-8') as jf:
             coords = json.load(jf)
         plot_trajectory(coords, export_path)

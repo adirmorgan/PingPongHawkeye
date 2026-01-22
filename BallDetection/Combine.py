@@ -53,16 +53,22 @@ def combine_scores(strategy: str,
 @timeit("TOP_2D")
 def TOP_2D(frames: np.ndarray,
            frame_index: int,
-           full_cfg: dict) -> tuple[tuple[int, int] | None,
-                                     list[tuple[np.ndarray, float, float, float, float]]]:
+           full_cfg: dict) -> tuple[np.ndarray | None,
+                                    tuple[int, int] | None,
+                                    float,
+                                    float,
+                                    float,
+                                    float]:
     """
     Process a single frame:
       - Extract candidate contours.
       - Compute shape/color/motion scores for each.
       - Combine scores according to config.
     Returns:
+      best_contour: best contour or None
       best_coord: (x, y) of best contour's centroid or None
-      scored: list of (contour, combined_score_score, s_score, c_score, m_score)
+      best_score: combined score or 0.0
+      best_s_score, best_c_score, best_m_score: component scores for best contour
     """
     with timeit("Setup"):
         combine_cfg = full_cfg["combine"]
@@ -104,9 +110,37 @@ def TOP_2D(frames: np.ndarray,
                 best_contour = contour
 
     best_coord = get_coordinates(best_contour) if best_contour is not None else None
-    if best_coord is None: best_score = 0.0
+    if best_coord is None:
+        best_score = 0.0
 
     return best_contour, best_coord, best_score, best_s_score, best_c_score, best_m_score
+
+
+def to_displayable(img: np.ndarray) -> np.ndarray:
+    """
+    Ensure img is uint8 and 3-channel BGR for visualization + drawing colored overlays.
+    Handles common cases: float images in [0,1] or [0,255], grayscale frames, etc.
+    """
+    out = img
+
+    # Convert dtype to uint8
+    if out.dtype != np.uint8:
+        out = np.nan_to_num(out, nan=0.0, posinf=255.0, neginf=0.0)
+        out = np.clip(out, 0, 255)
+
+        # If looks normalized, scale up
+        if out.max() <= 1.0:
+            out = out * 255.0
+
+        out = out.astype(np.uint8)
+
+    # Ensure 3 channels (BGR)
+    if out.ndim == 2:
+        out = cv2.cvtColor(out, cv2.COLOR_GRAY2BGR)
+    elif out.ndim == 3 and out.shape[2] == 1:
+        out = cv2.cvtColor(out, cv2.COLOR_GRAY2BGR)
+
+    return out
 
 
 def main():
@@ -145,37 +179,39 @@ def main():
 
     for frame_idx in range(frames.shape[0]):
         frame = frames[frame_idx]
-        display = frame.copy()
+        display = to_displayable(frame).copy()
 
-        best_coord, combined_score, contour, s , c, m = TOP_2D(frames, frame_idx, full_cfg) # get prediction of 2D location of the object
+        best_contour, best_coord, combined_score, s, c, m = TOP_2D(frames, frame_idx, full_cfg)
         coords.append(best_coord)
 
-        # mark the relevant contour
-        x, y, w, h = cv2.boundingRect(contour)
-        cv2.drawContours(display, [contour], -1, (0, 255, 0), 1)
+        if best_contour is not None and len(best_contour) > 0:
+            # Validate contour data type
+            if best_contour.dtype not in (np.float32, np.int32):
+                best_contour = best_contour.astype(np.float32)
 
-        # display scores
-        if show_components:
-            text = f"{combined_score:.2f} S:{s:.2f} C:{c:.2f} M:{m:.2f}"
+            # Compute bounding rectangle
+            x, y, w, h = cv2.boundingRect(best_contour)
+            cv2.drawContours(display, [best_contour], -1, (0, 255, 0), 1)
+
+            # Display scores
+            text = f"{combined_score:.2f} S:{s:.2f} C:{c:.2f} M:{m:.2f}" if show_components else f"{combined_score:.2f}"
+            cv2.putText(
+                display,
+                text,
+                (x, max(y - 5, 0)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 255, 0),
+                1,
+                cv2.LINE_AA,
+            )
         else:
-            text = f"{combined_score:.2f}"
+            # Not an error; just means nothing passed the threshold
+            pass
 
-        cv2.putText(
-            display,
-            text,
-            (x, max(y - 5, 0)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (0, 255, 0),
-            1,
-            cv2.LINE_AA,
-        )
-
-        # Optional per-frame logging
-        if combine_cfg.get("print", False):
-            print(f"Frame {frame_idx}: {best_coord}")
-
+        # ✅ Actually show the frame (this was missing in your code)
         cv2.imshow(window_name, display)
+
         key = cv2.waitKey(delay) & 0xFF
         if key == ord("q"):
             break

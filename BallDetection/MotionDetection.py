@@ -70,7 +70,7 @@ def compute_background_model(frames: np.ndarray,
         cv2.accumulateWeighted(frames[i], background, learning_rate)
     return cv2.convertScaleAbs(background)
 
-
+@timeit("Motion Detection")
 def Motion_Detection(frames: np.ndarray,
                      frame_index: int,
                      contour: np.ndarray,

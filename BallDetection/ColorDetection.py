@@ -3,6 +3,7 @@ import argparse
 import utils
 from utils import *
 
+@timeit("Color Detection")
 def Color_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, cfg: dict) -> float:
     """
     Compute a color score for the entire surface inside the contour.

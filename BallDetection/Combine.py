@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-import json
 import argparse
-import numpy as np
+import json
 import cv2
+import numpy as np
 import concurrent.futures
 
 from BallDetection import MotionDetection, ShapeDetection, ColorDetection
-from utils import *  # assumes timeit, Contours, get_coordinates exist
+from utils import *  # assumes timeit, timing, Contours, get_coordinates, threadit, THREADING_ENABLE exist
 
 
 def combine_scores(strategy: str,
@@ -51,31 +51,27 @@ def combine_scores(strategy: str,
 
 
 @timeit("TOP_2D")
-def TOP_2D(frames: np.ndarray,
-           frame_index: int,
-           full_cfg: dict,
-           executor: concurrent.futures.Executor | None = None
-           ) -> tuple[np.ndarray | None,
-                      tuple[int, int] | None,
-                      float,
-                      float,
-                      float,
-                      float]:
+def TOP_2D(
+    frames: np.ndarray,
+    frame_index: int,
+    full_cfg: dict,
+    contour_executor: concurrent.futures.Executor | None = None,
+    method_executor: concurrent.futures.Executor | None = None,
+) -> tuple[np.ndarray | None,
+           tuple[int, int] | None,
+           float,
+           float,
+           float,
+           float]:
     """
-    Process a single frame:
-      - Extract candidate contours.
-      - Compute shape/color/motion scores for each.
-      - Combine scores according to config.
+    Parallelization (when enabled and pools provided):
+      - Between contours: uses contour_executor
+      - Between detection methods (S/C/M) per contour: uses method_executor
 
-    Parallelization (TODO applied):
-      - For EACH contour, Shape/Color/Motion run concurrently in threads.
-
-    Returns:
-      best_contour: best contour or None
-      best_coord: (x, y) of best contour's centroid or None
-      best_score: combined score or 0.0
-      best_s_score, best_c_score, best_m_score: component scores for best contour
+    If pools are None:
+      - uses internal threadit pools (which become sequential if utils.threading(False) was called).
     """
+
     with timeit("Setup"):
         combine_cfg = full_cfg["combine"]
         shape_cfg = full_cfg["shape_detection"]
@@ -88,65 +84,74 @@ def TOP_2D(frames: np.ndarray,
         min_score = float(combine_cfg.get("min_score", 0.0))
         strategy = combine_cfg.get("strategy", "gather")
 
-    best_score = min_score
-    best_s_score, best_c_score, best_m_score = 0.0, 0.0, 0.0
-    best_contour = None
-
     with timeit("Contours"):
         contours = Contours(frames, frame_index, full_cfg)
 
-    created_local_executor = False
-    if executor is None:
-        # Default: 3 workers is enough because we only parallelize 3 tasks per contour
-        executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
-        created_local_executor = True
+    if not contours:
+        return None, None, 0.0, 0.0, 0.0, 0.0
 
-    try:
-        for idx, contour in enumerate(contours):
-            with timeit(f"Contour {idx}"):
+    use_external_contour = contour_executor is not None
+    use_external_method = method_executor is not None
+    same_pool = (use_external_contour and use_external_method and contour_executor is method_executor)
 
-                # Wrap each method so your timeit blocks still show meaningful labels
-                def _shape():
-                    with timeit("Shape Detection"):
-                        return float(ShapeDetection.Shape_Detection(frames, frame_index, contour, shape_cfg))
+    def eval_methods_sequential(contour) -> tuple[float, float, float]:
+        s_score = float(ShapeDetection.Shape_Detection(frames, frame_index, contour, shape_cfg))
+        c_score = float(ColorDetection.Color_Detection(frames, frame_index, contour, color_cfg))
+        m_score = float(MotionDetection.Motion_Detection(frames, frame_index, contour, motion_cfg))
+        return s_score, c_score, m_score
 
-                def _color():
-                    with timeit("Color Detection"):
-                        return float(ColorDetection.Color_Detection(frames, frame_index, contour, color_cfg))
+    def eval_contour_with_method_pool(contour, method_pool) -> tuple[float, float, float, float, np.ndarray]:
+        if same_pool:
+            s_score, c_score, m_score = eval_methods_sequential(contour)
+        else:
+            fs = method_pool.submit(ShapeDetection.Shape_Detection, frames, frame_index, contour, shape_cfg)
+            fc = method_pool.submit(ColorDetection.Color_Detection, frames, frame_index, contour, color_cfg)
+            fm = method_pool.submit(MotionDetection.Motion_Detection, frames, frame_index, contour, motion_cfg)
 
-                def _motion():
-                    with timeit("Motion Detection"):
-                        return float(MotionDetection.Motion_Detection(frames, frame_index, contour, motion_cfg))
+            s_score = float(fs.result())
+            c_score = float(fc.result())
+            m_score = float(fm.result())
 
-                # --- Parallel run of the three detection methods
-                fut_s = executor.submit(_shape)
-                fut_c = executor.submit(_color)
-                fut_m = executor.submit(_motion)
+        combined = combine_scores(strategy, s_score, c_score, m_score, s_w, c_w, m_w)
+        return float(combined), float(s_score), float(c_score), float(m_score), contour
 
-                # Collect (exceptions propagate here, which is good)
-                s_score = fut_s.result()
-                c_score = fut_c.result()
-                m_score = fut_m.result()
+    best_score = min_score
+    best_s = best_c = best_m = 0.0
+    best_contour = None
 
-                with timeit("Combining scores"):
-                    combined_score = combine_scores(strategy, s_score, c_score, m_score, s_w, c_w, m_w)
+    # ---- External pools path (used by TOP_3D and by this file's main() when THREADING_ENABLE)
+    if use_external_contour and use_external_method:
+        futures = [contour_executor.submit(eval_contour_with_method_pool, contour, method_executor)
+                   for contour in contours]
 
-                if combined_score > best_score:
-                    best_s_score = s_score
-                    best_c_score = c_score
-                    best_m_score = m_score
-                    best_score = combined_score
+        for fut in concurrent.futures.as_completed(futures):
+            combined, s, c, m, contour = fut.result()
+            if combined > best_score:
+                best_score = combined
+                best_s, best_c, best_m = s, c, m
+                best_contour = contour
+
+    # ---- Internal threadit path (toggleable; threadit is sequential when THREADING_ENABLE=False)
+    else:
+        contour_workers = int(full_cfg.get("combine", {}).get("contour_workers", min(32, len(contours))))
+        method_workers = int(full_cfg.get("combine", {}).get("method_workers", 3 * max(1, min(8, contour_workers))))
+
+        with threadit(max_workers=contour_workers) as contour_th, threadit(max_workers=method_workers) as method_th:
+            futs = [contour_th.submit(eval_contour_with_method_pool, contour, method_th)
+                    for contour in contours]
+
+            for fut in contour_th.as_completed(futs):
+                combined, s, c, m, contour = fut.result()
+                if combined > best_score:
+                    best_score = combined
+                    best_s, best_c, best_m = s, c, m
                     best_contour = contour
-
-    finally:
-        if created_local_executor:
-            executor.shutdown(wait=True)
 
     best_coord = get_coordinates(best_contour) if best_contour is not None else None
     if best_coord is None:
         best_score = 0.0
 
-    return best_contour, best_coord, best_score, best_s_score, best_c_score, best_m_score
+    return best_contour, best_coord, best_score, best_s, best_c, best_m
 
 
 def to_displayable(img: np.ndarray) -> np.ndarray:
@@ -201,15 +206,31 @@ def main():
 
     coords: list[tuple[int, int] | None] = []
 
-    # Create ONE executor and reuse it for all frames (lower overhead).
-    # Only 3 workers are needed because we parallelize exactly 3 detection tasks per contour.
-    workers = int(combine_cfg.get("detectors_workers", 3))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+    # Reuse pools across frames when threading is enabled
+    contour_workers = int(combine_cfg.get("contour_workers", 16))
+    method_workers = int(combine_cfg.get("method_workers", 3 * max(1, contour_workers)))
+
+    contour_executor = None
+    method_executor = None
+    created = False
+
+    if THREADING_ENABLE:
+        contour_executor = concurrent.futures.ThreadPoolExecutor(max_workers=contour_workers)
+        method_executor = concurrent.futures.ThreadPoolExecutor(max_workers=method_workers)
+        created = True
+
+    try:
         for frame_idx in range(frames.shape[0]):
             frame = frames[frame_idx]
             display = to_displayable(frame).copy()
 
-            best_contour, best_coord, combined_score, s, c, m = TOP_2D(frames, frame_idx, full_cfg, executor=executor)
+            best_contour, best_coord, combined_score, s, c, m = TOP_2D(
+                frames,
+                frame_idx,
+                full_cfg,
+                contour_executor=contour_executor,
+                method_executor=method_executor,
+            )
             coords.append(best_coord)
 
             if best_contour is not None and len(best_contour) > 0:
@@ -219,7 +240,8 @@ def main():
                 x, y, w, h = cv2.boundingRect(best_contour)
                 cv2.drawContours(display, [best_contour], -1, (0, 255, 0), 1)
 
-                text = f"{combined_score:.2f} S:{s:.2f} C:{c:.2f} M:{m:.2f}" if show_components else f"{combined_score:.2f}"
+                text = (f"{combined_score:.2f} S:{s:.2f} C:{c:.2f} M:{m:.2f}"
+                        if show_components else f"{combined_score:.2f}")
                 cv2.putText(
                     display,
                     text,
@@ -236,6 +258,11 @@ def main():
             key = cv2.waitKey(delay) & 0xFF
             if key == ord("q"):
                 break
+
+    finally:
+        if created:
+            contour_executor.shutdown(wait=True)
+            method_executor.shutdown(wait=True)
 
     cv2.destroyAllWindows()
 

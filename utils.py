@@ -1,10 +1,11 @@
-import json
-from itertools import combinations
+from __future__ import annotations
 
+import json
+import concurrent.futures
+from typing import Any, Callable, Generic, Iterable, Iterator, Optional, TypeVar
 from cv2 import Mat
 from numpy import ndarray, dtype, float64
 
-from BallDetection.ShapeDetection import preprocess_mask as shape_mask
 from typing import List, Tuple, Any
 import numpy as np
 
@@ -82,6 +83,150 @@ class timeit:
                 return func(*args, **kwargs)
 
         return wrapper
+
+
+
+T = TypeVar("T")
+R = TypeVar("R")
+
+# Global toggle for threadit
+THREADING_ENABLE: bool = True
+
+
+def threading(enable: bool) -> None:
+    """
+    Enable/disable multithreading globally for threadit.
+
+    Usage:
+        threading(True)   # enable
+        threading(False)  # disable (threadit behaves sequentially)
+    """
+    global THREADING_ENABLE
+    THREADING_ENABLE = bool(enable)
+
+
+class _ImmediateFuture(Generic[R]):
+    """
+    Future-like object used when threading is disabled.
+    Supports .result() so the same code works in both modes.
+    """
+    __slots__ = ("_value", "_exc")
+
+    def __init__(self, value: Optional[R] = None, exc: Optional[BaseException] = None):
+        self._value = value
+        self._exc = exc
+
+    def result(self, timeout: Optional[float] = None) -> R:
+        if self._exc is not None:
+            raise self._exc
+        return self._value  # type: ignore[return-value]
+
+
+class threadit:
+    """
+    Context manager that provides a thread-pool interface while allowing a global on/off switch.
+
+    When THREADING_ENABLE is False:
+      - submit() executes immediately and returns an _ImmediateFuture
+      - map() runs sequentially
+      - as_completed() yields futures in input order
+
+    When THREADING_ENABLE is True:
+      - uses ThreadPoolExecutor (either provided or created locally)
+
+    Patterns:
+
+        with threadit(max_workers=16) as th:
+            futs = [th.submit(work, x) for x in items]
+            for fut in th.as_completed(futs):
+                out = fut.result()
+
+        with threadit(max_workers=16) as th:
+            for out in th.map(work, items):
+                ...
+
+    IMPORTANT:
+      - threadit does NOT print timing by itself; wrap it with your existing timeit if you want timing.
+    """
+
+    def __init__(
+        self,
+        *,
+        max_workers: Optional[int] = None,
+        executor: Optional[concurrent.futures.Executor] = None,
+        enabled: Optional[bool] = None,
+    ):
+        self.max_workers = max_workers
+        self._external_executor = executor
+        self._executor: Optional[concurrent.futures.Executor] = None
+        self._owns_executor = False
+        self._enabled = THREADING_ENABLE if enabled is None else bool(enabled)
+
+    def __enter__(self) -> "threadit":
+        if self._enabled:
+            if self._external_executor is not None:
+                self._executor = self._external_executor
+                self._owns_executor = False
+            else:
+                # Reasonable default if not specified
+                if self.max_workers is None:
+                    cpu = os.cpu_count() or 1
+                    mw = min(32, cpu + 4)
+                else:
+                    mw = int(self.max_workers)
+                    if mw <= 0:
+                        mw = 1
+
+                self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=mw)
+                self._owns_executor = True
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if self._owns_executor and self._executor is not None:
+            self._executor.shutdown(wait=True)
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    def submit(self, fn: Callable[..., R], /, *args: Any, **kwargs: Any):
+        """
+        Submit a task; returns a Future-like object:
+          - concurrent.futures.Future when enabled
+          - _ImmediateFuture when disabled
+        """
+        if not self._enabled:
+            try:
+                return _ImmediateFuture(fn(*args, **kwargs))
+            except BaseException as e:
+                return _ImmediateFuture(exc=e)
+
+        if self._executor is None:
+            raise RuntimeError("threadit.submit() used outside of 'with threadit(...)' context.")
+        return self._executor.submit(fn, *args, **kwargs)
+
+    def map(self, fn: Callable[[T], R], iterable: Iterable[T]) -> Iterator[R]:
+        """
+        Like executor.map, but sequential when disabled.
+        """
+        if not self._enabled:
+            for x in iterable:
+                yield fn(x)
+            return
+
+        if self._executor is None:
+            raise RuntimeError("threadit.map() used outside of 'with threadit(...)' context.")
+        yield from self._executor.map(fn, iterable)
+
+    def as_completed(self, futures: Iterable[Any]) -> Iterator[Any]:
+        """
+        Yield futures as they complete (enabled) or in input order (disabled).
+        """
+        if not self._enabled:
+            for f in futures:
+                yield f
+            return
+        yield from concurrent.futures.as_completed(futures)
 def printGreen(s): print("\033[92m {}\033[00m".format(s))
 def printGrey(s): print("\033[37m {}\033[00m".format(s))
 def Contours(frames: np.ndarray, frame_index: int, cfg: dict) -> List[Tuple[np.ndarray, int]]:
@@ -404,4 +549,65 @@ def color_mask(frame: np.ndarray, cfg: dict):
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel, iterations=1)
+    return mask
+
+def shape_mask(frame: np.ndarray, cfg: Dict) -> np.ndarray:
+    """
+    Generate binary mask for candidate ball regions based on color/Lab thresholds.
+    Morphology is tuned to avoid merging nearby objects too aggressively.
+    cfg keys (examples):
+      - "color_space": "HSV" or "YCrCb"
+      - "lower_thresh": [H, S, V] or [Y, Cr, Cb]
+      - "upper_thresh": [H, S, V] or [Y, Cr, Cb]
+      - "lab_thresh": float (optional)
+      - "lab_ref": [L, a, b] (optional)
+      - "gaussian_ksize": int (odd)
+      - "open_ksize": int
+      - "close_ksize": int
+    """
+    # Ensure 3 channels (convert grayscale to BGR if needed)
+    if len(frame.shape) == 2 or frame.shape[2] == 1:
+        frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+
+    # Optional Lab-based distance thresholding
+    lab_thresh = cfg.get("lab_thresh", None)
+    if lab_thresh is not None:
+        lab = cv2.cvtColor(frame, cv2.COLOR_BGR2Lab).astype(np.float32)
+        ref = np.array(cfg.get("lab_ref", [200.0, 128.0, 128.0]), dtype=np.float32)
+        dist = np.linalg.norm(lab - ref[None, None, :], axis=2)
+        mask = (dist < float(lab_thresh)).astype(np.uint8) * 255
+    else:
+        # Default: HSV or YCrCb in-range threshold
+        space = cfg.get("color_space", "HSV").upper()
+        if space == "HSV":
+            conv = cv2.COLOR_BGR2HSV
+        elif space in ("YCRCB", "YCrCb"):
+            conv = cv2.COLOR_BGR2YCrCb
+        else:
+            conv = cv2.COLOR_BGR2HSV  # fallback
+
+        cs = cv2.cvtColor(frame, conv)
+        lower = np.array(cfg.get("lower_thresh", [0, 0, 200]), dtype=np.uint8)
+        upper = np.array(cfg.get("upper_thresh", [180, 30, 255]), dtype=np.uint8)
+        mask = cv2.inRange(cs, lower, upper)
+
+    # Light blur to smooth noise, but not too large to avoid merging objects
+    gaussian_ksize = int(cfg.get("gaussian_ksize", 5))
+    if gaussian_ksize % 2 == 0:
+        gaussian_ksize += 1
+    if gaussian_ksize >= 3:
+        mask = cv2.GaussianBlur(mask, (gaussian_ksize, gaussian_ksize), 0)
+
+    # Morphology: first OPEN (remove noise), then a small CLOSE (fix small holes)
+    open_ksize = int(cfg.get("open_ksize", 3))
+    close_ksize = int(cfg.get("close_ksize", 3))
+
+    if open_ksize > 0:
+        kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (open_ksize, open_ksize))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_open)
+
+    if close_ksize > 0:
+        kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close_ksize, close_ksize))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_close)
+
     return mask

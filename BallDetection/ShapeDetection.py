@@ -1,7 +1,4 @@
-import json
 import argparse
-import cv2
-import numpy as np
 from typing import Dict
 from utils import *  # assumes timing()/timeit/time config exist
 
@@ -67,7 +64,7 @@ def preprocess_mask(frame: np.ndarray, cfg: Dict) -> np.ndarray:
 
     return mask
 
-
+@timeit("Shape Detection")
 def Shape_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, cfg: Dict) -> float:
     """
     Compute a composite ellipse-based score for a contour.

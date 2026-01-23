@@ -148,93 +148,6 @@ def Shape_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, c
     return score
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Shape-based ping-pong ball detection GUI")
-    parser.add_argument("config", help="Path to JSON config file")
-    parser.add_argument(
-        "--export-config",
-        dest="export_config",
-        help="Optional path to export the used Shape Detection config"
-    )
-    args = parser.parse_args()
-
-    # Load full config
-    with open(args.config, "r", encoding="utf-8") as f:
-        full_cfg = json.load(f)
-
-    # Optional global timing toggle
-    if "timing" in full_cfg:
-        timing(full_cfg["timing"])
-
-    # Shape-specific configuration section or fallback
-    cfg = full_cfg.get("shape_detection", full_cfg)
-
-    # Load video frames from .npy
-    video_path = cfg["video_npy"]
-    frames = np.load(video_path)
-
-    window_name = cfg.get("window_name", "Shape Detection")
-    mask_window_name = cfg.get("mask_window_name", "Shape Mask")
-    delay = int(cfg.get("display_fps_delay", 30))
-    min_score = float(cfg.get("min_score", 0.5))
-    draw_ellipse = bool(cfg.get("draw_ellipse", True))
-
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.namedWindow(mask_window_name, cv2.WINDOW_NORMAL)
-
-    for idx in range(len(frames)):
-        frame = frames[idx]
-        display = frame.copy()
-
-        # 1) Build mask for candidate regions
-        mask = preprocess_mask(frame, cfg)
-
-        # 2) Extract contours from mask
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        # 3) Evaluate each contour and draw all with score >= min_score
-        for cnt in contours:
-            score = Shape_Detection(frames, idx, cnt, cfg)
-            if score >= min_score:
-                x, y, w_box, h_box = cv2.boundingRect(cnt)
-                cv2.rectangle(display, (x, y), (x + w_box, y + h_box), (0, 255, 0), 2)
-
-                if draw_ellipse and len(cnt) >= 5:
-                    ellipse = cv2.fitEllipse(cnt)
-                    cv2.ellipse(display, ellipse, (255, 0, 0), 2)
-
-                cv2.putText(
-                    display,
-                    f"{score:.2f}",
-                    (x, max(y - 5, 0)),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    (0, 0, 255),
-                    2,
-                    cv2.LINE_AA,
-                )
-
-        # 4) Show frames
-        cv2.imshow(window_name, display)
-        cv2.imshow(mask_window_name, mask)
-
-        key = cv2.waitKey(delay) & 0xFF
-        if key == ord("q"):
-            break
-
-    cv2.destroyAllWindows()
-
-    # Optional: export the shape config used
-    if args.export_config:
-        with open(args.export_config, "w", encoding="utf-8") as ef:
-            json.dump(cfg, ef, indent=4)
-        print(f"Config exported to {args.export_config}")
-
-
-if __name__ == "__main__":
-    main()
-
-
 
 
 def main():
@@ -251,12 +164,11 @@ def main():
     with open(args.config, "r", encoding="utf-8") as f:
         full_cfg = json.load(f)
 
-    # Use a dedicated section if exists, otherwise fallback to whole config
-    cfg = full_cfg.get("shape_detection", full_cfg)
+    cfg = full_cfg.get("shape_detection", None)
+    if cfg is None:
+        raise ValueError("missing 'shape_detection' configuration")
 
-    # Optional: global timing toggle
-    if "timing" in full_cfg:
-        timing(full_cfg["timing"])
+    timing(full_cfg.get("timing", False))
 
     # Load frames
     frames = np.load(cfg["video_npy"])
@@ -270,10 +182,9 @@ def main():
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.namedWindow(mask_window_name, cv2.WINDOW_NORMAL)
 
-    paused = False
-    for idx in range(len(frames)):
-        if paused:
-            idx = idx-1
+    flow = video_flow_controller(nframes = len(frames), delay = delay)
+    while(flow.loop_cond()):
+        idx = flow.get_frame_index()
         frame = frames[idx]
         display = frame.copy()
 
@@ -304,24 +215,15 @@ def main():
                     2,
                     cv2.LINE_AA,
                 )
-
-        # 4) Show windows
+        # 4) display GUI info
+            info_text = flow.info_text()
+            cv2.putText(display, info_text, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
+        # 5) Show windows
         cv2.imshow(window_name, display)
         cv2.imshow(mask_window_name, mask)
 
-        key = cv2.waitKey(delay) & 0xFF
-        if key == ord("q"):
-            break
-        elif key == ord(' '):
-            paused = not paused
-        elif paused and key == ord('d'):
-           idx = (idx + 1) % len(frames)
-        elif paused and key == ord('a'):
-           idx = (idx - 1) % len(frames)
-        if key == ord('w'):
-           idx = (idx + 10) % len(frames)
-        if key == ord('s'):
-           idx = (idx - 10) % len(frames)
+        # 6) move to the next frame
+        flow.next_frame()
 
     cv2.destroyAllWindows()
 

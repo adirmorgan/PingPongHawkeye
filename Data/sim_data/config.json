@@ -1,0 +1,104 @@
+{
+  "mp4_to_npy": {
+    "input_video": "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\camera1.mp4",
+    "output_npy": "C:\\Users\\itays\\Downloads\\camera1.npy",
+    "grayscale": false,
+    "resize": [1280, 1024]
+  },
+  "contours": {
+    "mask_method": "color"
+  },
+  "combine": {
+    "npy_file": "C:\\Users\\itays\\Downloads\\pingpong.npy",
+    "print": true,
+    "min_score": 0.01,
+    "strategy": "filter",
+    "shape_weight": 0.1,
+    "color_weight": 0.1,
+    "motion_weight": 0.8,
+    "show_components" : true
+  },
+  "motion_detection": {
+    "video_npy": "C:\\Users\\itays\\Downloads\\pingpong.npy",
+    "background_learning_rate": 0.01,
+    "background_threshold": 30,
+    "display_fps_delay": 60,
+    "motion_window": "Motion Detection",
+    "channel_weights": [1, 1, 1],
+    "method": "kstep",
+    "motion_k": 5,
+    "motion_threshold": 20,
+    "proximity_sigma": 1,
+    "shadow_weight": 0.1
+  },
+  "color_detection": {
+    "video_npy": "C:\\Users\\itays\\Downloads\\pingpong.npy",
+    "lower_hsv": [140, 100, 100],
+    "upper_hsv": [170, 255, 255],
+    "roi_bounds": [0, 1280, 0, 1024],
+    "min_size": 5,
+    "max_size": 50,
+    "min_v_brightness": 80,
+    "display_fps_delay": 60,
+    "color_window": "Color Detection"
+  },
+  "shape_detection": {
+    "video_npy": "C:\\Users\\itays\\Downloads\\pingpong.npy",
+    "color_space": "HSV",
+    "lower_thresh": [140, 80, 100],
+    "upper_thresh": [170, 250, 255],
+    "lab_thresh": null,
+    "min_area": 0,
+    "max_area": 300,
+    "thresh": 0.4,
+    "display_fps_delay": 60,
+    "shape_window": "Shape Detection"
+  },
+  "show": {
+    "video_npy": ["C:\\Users\\itays\\Downloads\\pingpong.npy"],
+    "import_coords": [
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates01.json",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates02.json",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates03.json",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates12.json",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates13.json",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates23.json"
+    ],
+    "export_plots":[
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\trajectory01.png",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\trajectory02.png",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\trajectory03.png",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\trajectory12.png",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\trajectory13.png",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\trajectory23.png"
+    ],
+    "display_fps_delay": 60,
+    "show_window": "Tracking"
+  },
+  "PhysicalPosition": {
+    "npy_files": [
+      "C:\\Users\\itays\\Downloads\\camera1.npy",
+      "C:\\Users\\itays\\Downloads\\camera2.npy",
+      "C:\\Users\\itays\\Downloads\\camera3.npy",
+      "C:\\Users\\itays\\Downloads\\camera4.npy"
+    ],
+    "cameras_file": "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\cameras.json",
+    "frame_rate": 60,
+    "output_trajectory": "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates.json",
+    "pairs_trajectories": [
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates01.json",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates02.json",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates03.json",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates12.json",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates13.json",
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates23.json"
+                          ],
+    "save_pairs": true,
+    "tolerance" : 1e-4,
+    "merge_method" : "best",
+    "max_distance" : 30
+  },
+  "timing": true,
+  "printing": false,
+  "multithreading": true
+}

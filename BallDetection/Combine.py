@@ -5,6 +5,9 @@ import cv2
 import numpy as np
 import concurrent.futures
 
+from Tools.scripts.texi2html import increment
+from networkx.generators.random_graphs import fast_gnp_random_graph
+
 from BallDetection import MotionDetection, ShapeDetection, ColorDetection
 from utils import *  # assumes timeit, timing, Contours, get_coordinates, threadit, THREADING_ENABLE exist
 
@@ -219,8 +222,11 @@ def main():
         method_executor = concurrent.futures.ThreadPoolExecutor(max_workers=method_workers)
         created = True
 
+
     try:
-        for frame_idx in range(frames.shape[0]):
+        flow = video_flow_controller(nframes= len(frames), delay=delay)
+        while(flow.loop_cond()): # main loop
+            frame_idx = flow.get_frame_index()
             frame = frames[frame_idx]
             display = to_displayable(frame).copy()
 
@@ -252,12 +258,21 @@ def main():
                     1,
                     cv2.LINE_AA,
                 )
-
+            # Display speed, backward_flag, and paused_flag frome the video flow controller
+            info_text = flow.info_text() # using flow's __str__ mehtod
+            cv2.putText(
+                display,
+                info_text,
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
             cv2.imshow(window_name, display)
+            flow.next_frame()
 
-            key = cv2.waitKey(delay) & 0xFF
-            if key == ord("q"):
-                break
 
     finally:
         if created:

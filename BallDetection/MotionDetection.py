@@ -160,15 +160,22 @@ def main():
     parser.add_argument('--export-config', dest='export_config', help='Optional path to re-export config')
     args = parser.parse_args()
 
-    with open(args.config, 'r', encoding='utf-8') as f:
-        cfg = json.load(f)['motion_detection']
+    with open(args.config, "r", encoding="utf-8") as f:
+        full_cfg = json.load(f)
 
+    cfg = full_cfg.get("motion_detection", None)
+    if cfg is None:
+        raise ValueError("missing 'motion_detection' configuration")\
+
+    timing (['timing'])
     frames = np.load(cfg['video_npy'])
     window = cfg.get('motion_window', 'Motion Detection')
     delay = int(cfg.get('display_fps_delay', 30))
     cv2.namedWindow(window, cv2.WINDOW_NORMAL)
 
-    for idx in range(len(frames)):
+    flow = video_flow_controller(nframes = len(frames), delay = delay)
+    while(flow.loop_cond()):
+        idx = flow.get_frame_index()
         frame = frames[idx]
         mask = (compute_kstep_motion(frames, idx, cfg.get('motion_k',5), cfg.get('motion_threshold',25.0), shadow_weight=cfg.get('shadow_weight',0.3))[0]
                 if cfg.get('method','kstep')=='kstep'
@@ -180,10 +187,14 @@ def main():
             score = Motion_Detection(frames, idx, cnt, cfg)
             cv2.rectangle(display, (x,y), (x+w,y+h), (255,0,0),2)
             cv2.putText(display, f"{score:.2f}", (x,y-5), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255),1)
+        # Display the results, including the GUI's info.
+        info_text = flow.info_text() # GUI's playback speed, pause flag and backward flag
+        cv2.putText(display, info_text, (10,20), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,255,0),1)
         cv2.imshow(window, display)
         cv2.imshow('Mask', mask)
-        if cv2.waitKey(delay)&0xFF==ord('q'):
-            break
+
+        # move to the next frame
+        flow.next_frame()
 
     cv2.destroyAllWindows()
     if args.export_config:

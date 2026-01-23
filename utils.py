@@ -551,7 +551,7 @@ def color_mask(frame: np.ndarray, cfg: dict):
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel, iterations=1)
     return mask
 
-def shape_mask(frame: np.ndarray, cfg: Dict) -> np.ndarray:
+def shape_mask(frame: np.ndarray, cfg: dict) -> np.ndarray:
     """
     Generate binary mask for candidate ball regions based on color/Lab thresholds.
     Morphology is tuned to avoid merging nearby objects too aggressively.
@@ -611,3 +611,90 @@ def shape_mask(frame: np.ndarray, cfg: Dict) -> np.ndarray:
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_close)
 
     return mask
+
+class video_flow_controller:
+    def __init__ (self, frame_idx = 0, speed_cnt=1, pause_flag=False, back_flag=False, delay=1, nframes=None):
+        if type(frame_idx) != int:
+            raise TypeError("frame_idx must be an integer")
+        if type(speed_cnt) != int:
+            raise TypeError("speed_cnt must be an integer")
+        if type(delay) != int:
+            raise TypeError("delay must be an integer")
+        if delay <=0:
+            raise ValueError("delay must be a positive integer")
+        if nframes is not None and type(nframes) != int:
+            raise TypeError("nframes must be an integer or None")
+        if nframes is not None and nframes <= 0:
+            raise ValueError("nframes must be a positive integer or None")
+
+        self.frame_idx = frame_idx
+        self.speed_cnt = speed_cnt
+        self.pause_flag = pause_flag
+        self.back_flag = back_flag
+        self.delay = delay
+        self.nframes = nframes
+
+    # Setters
+    def set_frame_index(self, frame_idx):
+        self.frame_idx = frame_idx
+    def set_speed(self, speed_cnt):
+        self.speed_cnt = speed_cnt
+    def set_pause(self, pause_flag):
+        self.pause_flag = pause_flag
+    def set_back(self, back_flag):
+        self.back_flag = back_flag
+
+    #Getters
+    def get_frame_index(self):
+        return self.frame_idx
+    def get_speed(self):
+        return self.speed_cnt
+    def get_pause(self):
+        return self.pause_flag
+    def get_back(self):
+        return self.back_flag
+
+    # More methods
+    def next_frame(self, frame_idx = None):
+        if frame_idx is not None:
+            self.frame_idx = frame_idx
+
+        key = cv2.waitKey(self.delay) & 0xFF
+        if key == ord("q"):
+            print("Forced stop by the user")
+            self.frame_idx = self.nframes # skip to the end
+            return self.frame_idx
+        if key in [ord("p"), ord(" "), ord("0")]:
+            self.pause_flag = not self.pause_flag
+        if key == ord("b") or key == ord("-"):
+            self.back_flag = not self.back_flag
+        if key == ord("f") or key == ord("+"):
+            self.speed_cnt += 1
+        if key == ord("r") or key == ord("="):
+            self.speed_cnt = 1
+            self.pause_flag = False
+            self.back_flag = False
+        if key in range(ord("1"), ord("9")):  # enabling up to x8 speedup
+            self.speed_cnt = int(chr(key))
+
+        # increment frame index with respect to current state
+        increment = self.speed_cnt
+        if self.pause_flag: increment *= 0
+        if self.back_flag: increment *= -1
+        self.frame_idx += increment
+        return self.frame_idx
+
+    def loop_cond(self, frame_idx = None):
+        if frame_idx is not None: self.frame_idx = frame_idx
+        if self.nframes is None: raise ValueError("Checking loop condition without knowing the total number of frames")
+        if self.frame_idx < 0:
+            return False
+        if self.frame_idx >= self.nframes:
+            return False
+        return True
+
+    def info_text(self):
+        info_text = f"SPEED : x{self.speed_cnt}" if self.speed_cnt > 1 else ""
+        info_text += f" | BACK" if self.back_flag else ""
+        info_text += f" | PAUSE" if self.pause_flag else ""
+        return info_text

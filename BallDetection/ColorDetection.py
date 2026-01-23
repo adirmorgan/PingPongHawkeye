@@ -1,5 +1,7 @@
 import argparse
 
+import cv2
+
 import utils
 from utils import *
 
@@ -62,10 +64,14 @@ def main():
     parser.add_argument('--export-config', dest='export_config', help='Optional path to re-export full config')
     args = parser.parse_args()
 
-    with open(args.config, 'r', encoding='utf-8') as f:
+    with open(args.config, "r", encoding="utf-8") as f:
         full_cfg = json.load(f)
-    cfg = full_cfg['color_detection']
 
+    cfg = full_cfg.get("color_detection", None)
+    if cfg is None:
+        raise ValueError("missing 'color_detection' configuration")
+
+    timing(full_cfg['timing'])
     frames = np.load(cfg['video_npy'])
     window = cfg.get('color_window', 'Color Detection')
     mask_window = 'Threshold Mask'
@@ -73,11 +79,10 @@ def main():
 
     cv2.namedWindow(window, cv2.WINDOW_NORMAL)
     cv2.namedWindow(mask_window, cv2.WINDOW_NORMAL)
-    idx = 0
-    num = len(frames)
-    paused = False
 
-    while idx < num:
+    flow = video_flow_controller(nframes=len(frames), delay=delay)
+    while flow.loop_cond():
+        idx = flow.get_frame_index()
         frame = frames[idx]
         display = frame.copy()
         contours, mask = detect_ball_contours(frame, cfg)
@@ -90,17 +95,16 @@ def main():
             score = Color_Detection(frames, idx, cnt, cfg)
             cv2.rectangle(display, (x, y), (x + w, y + h), (0, 0, 255), 2)
             cv2.putText(display, f"{score:.2f}", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-
+        # display the GUI's info
+        info_text = flow.info_text()
+        cv2.putText(display, info_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+        # Show both the detection window and the mask window (from which the candidate contours were extracted)
         cv2.imshow(window, display)
         cv2.imshow(mask_window, mask)
-
-        key = cv2.waitKey(delay) & 0xFF
-        if key == ord('q'):
-            break
-        elif key == ord(' '):  # Spacebar toggles pause
-            paused = not paused
-        if not paused:
-            idx += 1
+        
+        # Move to the next frame
+        flow.next_frame()
+        
 
     cv2.destroyAllWindows()
     if args.export_config:

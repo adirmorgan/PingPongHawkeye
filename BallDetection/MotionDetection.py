@@ -4,9 +4,6 @@ import cv2
 import numpy as np
 from utils import *
 
-# TODO : motion detection gives too small scores... probably not normalized correctly
-#  maybe something with the proximity calculation...
-
 # TODO : kstep takes too much time... major bottleneck of our entire program!
 #   probably due to making the musk of the entire frame, again and again per each contour...
 #   sol1 - make musk per contour.
@@ -124,7 +121,7 @@ def Motion_Detection(frames: np.ndarray,
                 print("Error: method value is invalid")
                 return 0.0
 
-        with timeit("last"):# DEBUG
+        with timeit("last"):
             # Region mask for this contour
             region = np.zeros_like(mask, dtype=np.uint8)
             cv2.drawContours(region, [contour], -1, 255, thickness=cv2.FILLED)
@@ -148,10 +145,13 @@ def Motion_Detection(frames: np.ndarray,
 
             # Sample continuous motion strength inside contour
             mvals = motion_strength[ys, xs]  # already in [0,1]
+            mvals = np.clip(2*mvals, 0, 1)
+            #approximately half of the color diff would be outside of the contour... only inward diff is accounted- but there is the back
 
             # Weighted average motion score
             weighted_sum = np.sum(weights * mvals)
             weight_total = np.sum(weights)
+
             return float(weighted_sum / weight_total) if weight_total > 0 else 0.0
 
 def main():

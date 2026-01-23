@@ -88,9 +88,9 @@ def TOP_2D(frames: np.ndarray,
 
     with timeit("Contours"):
         # Contours() is expected to use frames[frame_index] internally with shape config
-        contours = Contours(frames, frame_index, shape_cfg)
+        contours = Contours(frames, frame_index, full_cfg)
 
-    for idx, (contour, _) in enumerate(contours):
+    for idx, contour in enumerate(contours):
         with timeit(f"Contour {idx}"):
             with timeit("Shape Detection"):
                 s_score = float(ShapeDetection.Shape_Detection(frames, frame_index, contour, shape_cfg))
@@ -162,7 +162,7 @@ def main():
     combine_cfg = full_cfg["combine"]
 
     # Global timing toggle
-    timing(combine_cfg.get("timing", False))
+    timing(full_cfg.get("timing", False))
 
     # Load frames
     npy_path = combine_cfg["npy_file"]
@@ -227,3 +227,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+# TODO: try to make code parallel! using threads on the different detection methods

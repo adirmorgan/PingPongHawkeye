@@ -1,8 +1,11 @@
 import json
 from itertools import combinations
 
-from BallDetection.ShapeDetection import preprocess_mask
-from typing import List, Tuple
+from cv2 import Mat
+from numpy import ndarray, dtype, float64
+
+from BallDetection.ShapeDetection import preprocess_mask as shape_mask
+from typing import List, Tuple, Any
 import numpy as np
 
 import time
@@ -10,7 +13,7 @@ import threading
 from functools import wraps
 
 # controled by the top module (it's main should call the function "timing")
-TIMING_ENABLED = True
+TIMING_ENABLED = False # unless requested explicitly (using the timing() method) - no timing prints will be shown
 
 def timing(enable: bool = True) -> None:
     """Global switch for timeit (set from config)."""
@@ -80,7 +83,7 @@ class timeit:
 
         return wrapper
 def printGreen(s): print("\033[92m {}\033[00m".format(s))
-
+def printGrey(s): print("\033[90m {}\033[00m".format(s))
 def Contours(frames: np.ndarray, frame_index: int, cfg: dict) -> List[Tuple[np.ndarray, int]]:
     """
     Return all contours in the given frame after masking via your shape thresholds.
@@ -91,12 +94,26 @@ def Contours(frames: np.ndarray, frame_index: int, cfg: dict) -> List[Tuple[np.n
       cfg (dict): shape_detection config section (color_space, thresholds, lab settings, etc.)
 
     Returns:
-      List of (contour, idx) tuples.
+      List of contours
     """
     frame = frames[frame_index]
-    mask = preprocess_mask(frame, cfg)
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    return [(cnt, i) for i, cnt in enumerate(contours)]
+    match cfg["contours"]["mask_method"]:
+        case "motion":
+            mask = motion_mask(frames, frame_index, cfg.get('motion_k', 5), 0,
+                                  shadow_weight=cfg.get('shadow_weight', 0.3))
+
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            return contours
+        case "shape":
+            mask = shape_mask(frame, cfg)
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            return contours
+        case "color":
+            mask = color_mask(frame, cfg)
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            return contours
+        case _:
+            raise ValueError(f"Invalid mask method: {cfg['contours']['mask_method']}")
 
 def get_coordinates(contour):
     """
@@ -316,18 +333,6 @@ def stream_and_save_video_as_array(video_path, output_path):
     print(f"Saved {frame_count} frames to {output_path}")
 
 
-
-if __name__ == '__main__':
-    create_config_json_file_for_Save_npy_file(
-        video_path="C:\\Users\\elad2\\Downloads\\pingpong_720p60_final.mp4",
-        hsv_lower=(0, 0, 195),
-        hsv_upper=(179, 80, 255),
-        output_path="C:\\Users\\elad2\\Downloads\\tryinnn_no_mask.npy",
-        apply_mask=False,
-        file_path="C:\\Users\\elad2\\Downloads\\config2.json"
-    )
-    browse_npy_file("C:\\Users\\elad2\\Downloads\\tryinnn.npy")
-
 def toleround(x, tolerance):
     """
     Round a number or a list of numbers to the nearest multiple of `tolerance`.
@@ -342,3 +347,61 @@ def toleround(x, tolerance):
         # Scalar case
         return _round_one(x)
 
+def motion_mask(frames: np.ndarray,
+                         frame_index: int,
+                         k: int,
+                         threshold: float,
+                         shadow_weight: float) -> tuple[ndarray[Any, dtype[float64]] | ndarray[Any, Any] | ndarray[
+    Any, dtype[Any]] | ndarray[tuple[int, ...], dtype[float64]] | ndarray[tuple[int, ...], dtype[Any]], ndarray[
+                                                            Any, dtype[float64]] | ndarray[Any, Any] | ndarray[
+                                                            Any, dtype[Any]] | ndarray[
+                                                            tuple[int, ...], dtype[float64]] | ndarray[
+                                                            tuple[int, ...], dtype[Any]]] | Mat | ndarray:
+    """
+    Compute:
+      - binary motion mask via k-frame difference
+      - continuous motion_strength in [0,1], where shadows are down-weighted.
+
+    shadow_weight < 1.0 reduces the contribution of darkening (shadows).
+    """
+    h, w = frames[0].shape[:2]
+
+    if frame_index < k:
+        return np.zeros((h, w), dtype=np.uint8), np.zeros((h, w), dtype=np.float32)
+
+    # Current and temporal average of previous k frames in grayscale
+    curr = cv2.cvtColor(frames[frame_index], cv2.COLOR_BGR2GRAY).astype(np.float32)
+    prev_stack = [
+        cv2.cvtColor(frames[i], cv2.COLOR_BGR2GRAY).astype(np.float32)
+        for i in range(frame_index - k, frame_index)
+    ]
+    base = sum(prev_stack) / float(k)
+
+    # Directional difference
+    diff = curr - base
+    pos = np.clip(diff, 0, None)        # brightening (object)
+    neg = np.clip(-diff, 0, None)       # darkening (shadow)
+
+    # Shadows contribute less
+    motion = (1-shadow_weight)*pos + shadow_weight * neg  # still >= 0
+
+    # Binary mask for visualization / contour extraction
+    mask = (motion > threshold).astype(np.uint8) * 255
+
+    # Smooth and dilate a bit
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.dilate(mask, kernel, iterations=1)
+    return mask
+
+def color_mask(frame: np.ndarray, cfg: dict):
+    # 1) convert to HSV and threshold for white
+    hsv  = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    lower = np.array(cfg["color_detection"]['lower_hsv'], dtype=np.uint8)
+    upper = np.array(cfg["color_detection"]['upper_hsv'], dtype=np.uint8)
+    mask  = cv2.inRange(hsv, lower, upper)
+
+    # 2) clean up small holes and noise
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel, iterations=1)
+    return mask

@@ -1,4 +1,5 @@
 import argparse
+import concurrent.futures
 
 from BallDetection.Combine import TOP_2D
 from utils import *  # assumes toleround, timeit, timing, etc.
@@ -55,7 +56,7 @@ def merge_predictions(method, pts3d, scr3d, nc: int):
         cam1, cam2 = int(method[1]), int(method[2])
         return pts3d[cam1][cam2]
 
-    if method == "majority":
+    if method == "majority": # return the rounded result that got (up to a tolerance) most votes
         pts_valid = [p for p in pts3d_flat if p is not None]
         if not pts_valid:
             return None
@@ -64,7 +65,7 @@ def merge_predictions(method, pts3d, scr3d, nc: int):
         best = unique[np.argmax(counts)]
         return float(best[0]), float(best[1]), float(best[2])
 
-    if method == "average":
+    if method == "average": # returns the (unweighted) average of all points
         pts_valid = [p for p in pts3d_flat if p is not None]
         if not pts_valid:
             return None
@@ -72,7 +73,7 @@ def merge_predictions(method, pts3d, scr3d, nc: int):
         mean = arr.mean(axis=0)
         return float(mean[0]), float(mean[1]), float(mean[2])
 
-    if method == "scores":
+    if method == "best": # uses the point resulted by the pair with the best score
         best_score = None
         best_pt = None
         for pt, sc in zip(pts3d_flat, scr3d_flat):
@@ -83,9 +84,9 @@ def merge_predictions(method, pts3d, scr3d, nc: int):
                 best_pt = pt
         return best_pt
 
-    if method == "weighted":
-        num = np.zeros(3, dtype=float)
-        den = 0.0
+    if method == "weighted": # weighted average
+        numer = np.zeros(3, dtype=float)
+        denom = 0.0
         for pt, sc in zip(pts3d_flat, scr3d_flat):
             if pt is None:
                 continue
@@ -94,11 +95,11 @@ def merge_predictions(method, pts3d, scr3d, nc: int):
             sc = float(sc)
             if sc <= 0.0:
                 continue
-            num += np.array(pt, dtype=float) * sc
-            den += sc
-        if den == 0.0:
+            numer += np.array(pt, dtype=float) * sc
+            denom += sc
+        if denom == 0.0:
             return None
-        out = num / den
+        out = numer / denom
         return float(out[0]), float(out[1]), float(out[2])
 
     raise ValueError(f"Unknown merge method: {method}")
@@ -127,14 +128,15 @@ def TOP_3D(
         exit(1)
 
     # TOP_2D returns (contour, coordinate, score) for each camera
-    res2d = [TOP_2D(all_frames[cam], frame_index, full_cfg=full_cfg) for cam in range(n_cameras)]
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        res2d = list(executor.map(lambda cam: TOP_2D(all_frames[cam], frame_index, full_cfg=full_cfg), range(n_cameras)))
     pts2d = [r[COORD_2D] for r in res2d]  # 2D points (pixel indices)
     scr2d = [r[SCORE_2D] for r in res2d]  # 2D detection scores
 
     if full_cfg.get("printing", False):
-        print(f"\t2D Results of Frame {frame_index}:")
+        printGrey(f"\t2D Results of Frame {frame_index}:")
         for cam in range(n_cameras):
-            print(f"\t\tCamera {cam} : {pts2d[cam]}")
+            printGrey(f"\t\tCamera {cam} : {pts2d[cam]}")
 
     # Pair list (stable ordering used everywhere)
     pair_list = list(combinations(range(n_cameras), 2))
@@ -195,7 +197,7 @@ def TOP_3D(
 
 
 @timeit("main (3D)")
-def main_auto():
+def main():
     parser = argparse.ArgumentParser(
         description="Compute 3D trajectory by looping over frames and triangulating per-instant"
     )
@@ -248,12 +250,12 @@ def main_auto():
             # Save each pair in the SAME schema: list of dicts with t,x,y,z (None => null)
             if pair_trajectories is not None:
                 for i, pt in enumerate(raw_points):
-                    e = {"t": t_now, "x": None, "y": None, "z": None} # entries' stracture
+                    entry = {"t": t_now, "x": None, "y": None, "z": None} # entries' stracture
                     if pt is not None:
-                        e["x"] = float(pt[0])
-                        e["y"] = float(pt[1])
-                        e["z"] = float(pt[2])
-                    pair_trajectories[i].append(e)
+                        entry["x"] = float(pt[0])
+                        entry["y"] = float(pt[1])
+                        entry["z"] = float(pt[2])
+                    pair_trajectories[i].append(entry)
 
     with timeit("Saving output trajectory"):
         with open(out_path, "w") as f:
@@ -275,63 +277,6 @@ def main_auto():
 
     print(f"3D trajectory saved to {out_path}")
 
-
-def run_gui(full_cfg):
-    phys_cfg = full_cfg["PhysicalPosition"]
-    all_frames = [np.load(p) for p in phys_cfg["npy_files"]]
-    n_frames = all_frames[0].shape[0]
-
-    paused = False
-    cv2.namedWindow("Physical Position GUI")
-    for frame_idx in range(n_frames):
-        if paused:
-            frame_idx = frame_idx - 1
-
-        out = []
-        for cam_idx in range(len(all_frames)):
-            frames = all_frames[cam_idx]
-            pt = TOP_2D(frames, frame_idx, full_cfg)
-            disp = frames[frame_idx].copy()
-            if pt is not None:
-                # pt from TOP_2D likely contains coordinate at index COORD_2D; adjust if needed
-                # Here you used pt[0],pt[1] earlier; keep as-is.
-                cv2.rectangle(disp, (pt[0] - 5, pt[1] - 5), (pt[0] + 5, pt[1] + 5), (0, 0, 255), 2)
-            out.append(disp)
-
-        concat = np.hstack(out)
-        cv2.imshow("Physical Position GUI", concat)
-        key = cv2.waitKey(phys_cfg.get("display_fps_delay", 30)) & 0xFF
-        if key == ord("q"):
-            break
-        elif key == ord(" "):
-            paused = not paused
-        elif paused and key == ord("d"):
-            frame_idx = (frame_idx + 1) % n_frames
-        elif paused and key == ord("a"):
-            frame_idx = (frame_idx - 1) % n_frames
-        if key == ord("w"):
-            frame_idx = (frame_idx + 10) % n_frames
-        if key == ord("s"):
-            frame_idx = (frame_idx - 10) % n_frames
-
-    cv2.destroyAllWindows()
-
-
-def main_gui():
-    parser = argparse.ArgumentParser(description="3D Trajectory GUI")
-    parser.add_argument("config", help="Path to JSON config file")
-    args = parser.parse_args()
-
-    full_cfg = json.load(open(args.config, "r"))
-    timing(full_cfg["timing"])
-    run_gui(full_cfg)
-
-
 if __name__ == "__main__":
-    choice = input("GUI or AUTO? (G/A) ")
-    if choice in ("G", "g"):
-        main_gui()
-    elif choice in ("A", "a"):
-        main_auto()
-    else:
-        print("Invalid choice. Exiting.")
+        main()
+# TODO: try to make the code parallel! using threads on the different 2D detections of different cameras.

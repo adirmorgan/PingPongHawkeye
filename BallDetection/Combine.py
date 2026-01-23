@@ -3,9 +3,10 @@ import json
 import argparse
 import numpy as np
 import cv2
+import concurrent.futures
 
 from BallDetection import MotionDetection, ShapeDetection, ColorDetection
-from utils import *  # assumes timeit, timing, Contours, get_coordinates exist
+from utils import *  # assumes timeit, Contours, get_coordinates exist
 
 
 def combine_scores(strategy: str,
@@ -30,7 +31,6 @@ def combine_scores(strategy: str,
             total_w = s_w + c_w + m_w
             if total_w <= 0:
                 return 0.0
-            # Avoid log/zero issues by clipping
             s = max(s_score, 1e-8)
             c = max(c_score, 1e-8)
             m = max(m_score, 1e-8)
@@ -53,17 +53,23 @@ def combine_scores(strategy: str,
 @timeit("TOP_2D")
 def TOP_2D(frames: np.ndarray,
            frame_index: int,
-           full_cfg: dict) -> tuple[np.ndarray | None,
-                                    tuple[int, int] | None,
-                                    float,
-                                    float,
-                                    float,
-                                    float]:
+           full_cfg: dict,
+           executor: concurrent.futures.Executor | None = None
+           ) -> tuple[np.ndarray | None,
+                      tuple[int, int] | None,
+                      float,
+                      float,
+                      float,
+                      float]:
     """
     Process a single frame:
       - Extract candidate contours.
       - Compute shape/color/motion scores for each.
       - Combine scores according to config.
+
+    Parallelization (TODO applied):
+      - For EACH contour, Shape/Color/Motion run concurrently in threads.
+
     Returns:
       best_contour: best contour or None
       best_coord: (x, y) of best contour's centroid or None
@@ -87,27 +93,54 @@ def TOP_2D(frames: np.ndarray,
     best_contour = None
 
     with timeit("Contours"):
-        # Contours() is expected to use frames[frame_index] internally with shape config
         contours = Contours(frames, frame_index, full_cfg)
 
-    for idx, contour in enumerate(contours):
-        with timeit(f"Contour {idx}"):
-            with timeit("Shape Detection"):
-                s_score = float(ShapeDetection.Shape_Detection(frames, frame_index, contour, shape_cfg))
-            with timeit("Color Detection"):
-                c_score = float(ColorDetection.Color_Detection(frames, frame_index, contour, color_cfg))
-            with timeit("Motion Detection"):
-                m_score = float(MotionDetection.Motion_Detection(frames, frame_index, contour, motion_cfg))
+    created_local_executor = False
+    if executor is None:
+        # Default: 3 workers is enough because we only parallelize 3 tasks per contour
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
+        created_local_executor = True
 
-            with timeit("Combining scores"):
-                combined_score = combine_scores(strategy, s_score, c_score, m_score, s_w, c_w, m_w)
+    try:
+        for idx, contour in enumerate(contours):
+            with timeit(f"Contour {idx}"):
 
-            if combined_score > best_score:
-                best_s_score = s_score
-                best_c_score = c_score
-                best_m_score = m_score
-                best_score = combined_score
-                best_contour = contour
+                # Wrap each method so your timeit blocks still show meaningful labels
+                def _shape():
+                    with timeit("Shape Detection"):
+                        return float(ShapeDetection.Shape_Detection(frames, frame_index, contour, shape_cfg))
+
+                def _color():
+                    with timeit("Color Detection"):
+                        return float(ColorDetection.Color_Detection(frames, frame_index, contour, color_cfg))
+
+                def _motion():
+                    with timeit("Motion Detection"):
+                        return float(MotionDetection.Motion_Detection(frames, frame_index, contour, motion_cfg))
+
+                # --- Parallel run of the three detection methods
+                fut_s = executor.submit(_shape)
+                fut_c = executor.submit(_color)
+                fut_m = executor.submit(_motion)
+
+                # Collect (exceptions propagate here, which is good)
+                s_score = fut_s.result()
+                c_score = fut_c.result()
+                m_score = fut_m.result()
+
+                with timeit("Combining scores"):
+                    combined_score = combine_scores(strategy, s_score, c_score, m_score, s_w, c_w, m_w)
+
+                if combined_score > best_score:
+                    best_s_score = s_score
+                    best_c_score = c_score
+                    best_m_score = m_score
+                    best_score = combined_score
+                    best_contour = contour
+
+    finally:
+        if created_local_executor:
+            executor.shutdown(wait=True)
 
     best_coord = get_coordinates(best_contour) if best_contour is not None else None
     if best_coord is None:
@@ -123,18 +156,13 @@ def to_displayable(img: np.ndarray) -> np.ndarray:
     """
     out = img
 
-    # Convert dtype to uint8
     if out.dtype != np.uint8:
         out = np.nan_to_num(out, nan=0.0, posinf=255.0, neginf=0.0)
         out = np.clip(out, 0, 255)
-
-        # If looks normalized, scale up
         if out.max() <= 1.0:
             out = out * 255.0
-
         out = out.astype(np.uint8)
 
-    # Ensure 3 channels (BGR)
     if out.ndim == 2:
         out = cv2.cvtColor(out, cv2.COLOR_GRAY2BGR)
     elif out.ndim == 3 and out.shape[2] == 1:
@@ -155,20 +183,16 @@ def main():
     )
     args = parser.parse_args()
 
-    # Load full configuration
     with open(args.config, "r", encoding="utf-8") as f:
         full_cfg = json.load(f)
 
     combine_cfg = full_cfg["combine"]
 
-    # Global timing toggle
     timing(full_cfg.get("timing", False))
 
-    # Load frames
     npy_path = combine_cfg["npy_file"]
     frames = np.load(npy_path)
 
-    # Visualization params
     window_name = combine_cfg.get("window_name", "combined_score Detection")
     delay = int(combine_cfg.get("display_fps_delay", 30))
     show_components = bool(combine_cfg.get("show_components", False))
@@ -177,48 +201,44 @@ def main():
 
     coords: list[tuple[int, int] | None] = []
 
-    for frame_idx in range(frames.shape[0]):
-        frame = frames[frame_idx]
-        display = to_displayable(frame).copy()
+    # Create ONE executor and reuse it for all frames (lower overhead).
+    # Only 3 workers are needed because we parallelize exactly 3 detection tasks per contour.
+    workers = int(combine_cfg.get("detectors_workers", 3))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        for frame_idx in range(frames.shape[0]):
+            frame = frames[frame_idx]
+            display = to_displayable(frame).copy()
 
-        best_contour, best_coord, combined_score, s, c, m = TOP_2D(frames, frame_idx, full_cfg)
-        coords.append(best_coord)
+            best_contour, best_coord, combined_score, s, c, m = TOP_2D(frames, frame_idx, full_cfg, executor=executor)
+            coords.append(best_coord)
 
-        if best_contour is not None and len(best_contour) > 0:
-            # Validate contour data type
-            if best_contour.dtype not in (np.float32, np.int32):
-                best_contour = best_contour.astype(np.float32)
+            if best_contour is not None and len(best_contour) > 0:
+                if best_contour.dtype not in (np.float32, np.int32):
+                    best_contour = best_contour.astype(np.float32)
 
-            # Compute bounding rectangle
-            x, y, w, h = cv2.boundingRect(best_contour)
-            cv2.drawContours(display, [best_contour], -1, (0, 255, 0), 1)
+                x, y, w, h = cv2.boundingRect(best_contour)
+                cv2.drawContours(display, [best_contour], -1, (0, 255, 0), 1)
 
-            # Display scores
-            text = f"{combined_score:.2f} S:{s:.2f} C:{c:.2f} M:{m:.2f}" if show_components else f"{combined_score:.2f}"
-            cv2.putText(
-                display,
-                text,
-                (x, max(y - 5, 0)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (0, 255, 0),
-                1,
-                cv2.LINE_AA,
-            )
-        else:
-            # Not an error; just means nothing passed the threshold
-            pass
+                text = f"{combined_score:.2f} S:{s:.2f} C:{c:.2f} M:{m:.2f}" if show_components else f"{combined_score:.2f}"
+                cv2.putText(
+                    display,
+                    text,
+                    (x, max(y - 5, 0)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 255, 0),
+                    1,
+                    cv2.LINE_AA,
+                )
 
-        # ✅ Actually show the frame (this was missing in your code)
-        cv2.imshow(window_name, display)
+            cv2.imshow(window_name, display)
 
-        key = cv2.waitKey(delay) & 0xFF
-        if key == ord("q"):
-            break
+            key = cv2.waitKey(delay) & 0xFF
+            if key == ord("q"):
+                break
 
     cv2.destroyAllWindows()
 
-    # Optional export of coordinates
     if args.export_coords:
         with open(args.export_coords, "w", encoding="utf-8") as of:
             json.dump({"coordinates": coords}, of, indent=4)
@@ -227,4 +247,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-# TODO: try to make code parallel! using threads on the different detection methods

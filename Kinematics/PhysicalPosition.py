@@ -1,5 +1,6 @@
 import argparse
 import concurrent.futures
+from itertools import combinations
 
 from BallDetection.Combine import TOP_2D
 from utils import *  # assumes toleround, timeit, timing, etc.
@@ -41,31 +42,27 @@ def merge_predictions(method, pts3d, scr3d, nc: int):
     if nc < 2:
         raise ValueError("Not enough cameras to merge predictions.")
 
-    # Precompute a stable ordering for pairs and flatten accordingly
     pair_list = list(combinations(range(nc), 2))
     pts3d_flat = [pts3d[c1][c2] for (c1, c2) in pair_list]
     scr3d_flat = [scr3d[c1][c2] for (c1, c2) in pair_list]
 
-    # Handle the special case (2 cameras) naturally via below logic,
-    # but keep this for clarity.
     if nc == 2:
         return pts3d[0][1]
 
-    # "select" can be passed as ["select", cam1, cam2]
     if isinstance(method, (list, tuple)) and len(method) == 3 and method[0] == "select":
         cam1, cam2 = int(method[1]), int(method[2])
         return pts3d[cam1][cam2]
 
-    if method == "majority": # return the rounded result that got (up to a tolerance) most votes
+    if method == "majority":  # return the rounded result that got most votes
         pts_valid = [p for p in pts3d_flat if p is not None]
         if not pts_valid:
             return None
-        arr = np.array(pts_valid, dtype=float)  # shape (k,3)
+        arr = np.array(pts_valid, dtype=float)
         unique, counts = np.unique(arr, axis=0, return_counts=True)
         best = unique[np.argmax(counts)]
         return float(best[0]), float(best[1]), float(best[2])
 
-    if method == "average": # returns the (unweighted) average of all points
+    if method == "average":  # returns the (unweighted) average of all points
         pts_valid = [p for p in pts3d_flat if p is not None]
         if not pts_valid:
             return None
@@ -73,7 +70,7 @@ def merge_predictions(method, pts3d, scr3d, nc: int):
         mean = arr.mean(axis=0)
         return float(mean[0]), float(mean[1]), float(mean[2])
 
-    if method == "best": # uses the point resulted by the pair with the best score
+    if method == "best":  # uses the point resulted by the pair with the best score
         best_score = None
         best_pt = None
         for pt, sc in zip(pts3d_flat, scr3d_flat):
@@ -84,13 +81,11 @@ def merge_predictions(method, pts3d, scr3d, nc: int):
                 best_pt = pt
         return best_pt
 
-    if method == "weighted": # weighted average
+    if method == "weighted":  # weighted average
         numer = np.zeros(3, dtype=float)
         denom = 0.0
         for pt, sc in zip(pts3d_flat, scr3d_flat):
-            if pt is None:
-                continue
-            if sc is None:
+            if pt is None or sc is None:
                 continue
             sc = float(sc)
             if sc <= 0.0:
@@ -108,7 +103,8 @@ def merge_predictions(method, pts3d, scr3d, nc: int):
 def TOP_3D(
     all_frames: list[np.ndarray],
     frame_index: int,
-    full_cfg: dict
+    full_cfg: dict,
+    executor: concurrent.futures.Executor | None = None,
 ) -> tuple[tuple[float, float, float] | None, list[tuple[float, float, float] | None]]:
     """
     Triangulate a 3D point from multiple camera frames at a single time instant.
@@ -127,22 +123,34 @@ def TOP_3D(
         print(f"Not enough cameras to triangulate. Found {n_cameras} cameras.")
         exit(1)
 
-    # TOP_2D returns (contour, coordinate, score) for each camera
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        res2d = list(executor.map(lambda cam: TOP_2D(all_frames[cam], frame_index, full_cfg=full_cfg), range(n_cameras)))
-    pts2d = [r[COORD_2D] for r in res2d]  # 2D points (pixel indices)
-    scr2d = [r[SCORE_2D] for r in res2d]  # 2D detection scores
+    # --- Parallelize TOP_2D across cameras (threads reused across frames if executor is passed)
+    def _call_top2d(cam_idx: int):
+        return TOP_2D(all_frames[cam_idx], frame_index, full_cfg=full_cfg)
+
+    created_local_executor = False
+    if executor is None:
+        executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(32, n_cameras)  # sensible default
+        )
+        created_local_executor = True
+
+    try:
+        res2d = list(executor.map(_call_top2d, range(n_cameras)))
+    finally:
+        if created_local_executor:
+            executor.shutdown(wait=True)
+
+    pts2d = [r[COORD_2D] for r in res2d]
+    scr2d = [r[SCORE_2D] for r in res2d]
 
     if full_cfg.get("printing", False):
         printGrey(f"\t2D Results of Frame {frame_index}:")
         for cam in range(n_cameras):
             printGrey(f"\t\tCamera {cam} : {pts2d[cam]}")
 
-    # Pair list (stable ordering used everywhere)
     pair_list = list(combinations(range(n_cameras), 2))
     n_combs = len(pair_list)
 
-    # Pair score: geometric mean of 2D scores (only meaningful if both detections exist)
     scr3d = [[0.0 for _ in range(n_cameras)] for _ in range(n_cameras)]
     pts3d = [[None for _ in range(n_cameras)] for _ in range(n_cameras)]
 
@@ -150,7 +158,6 @@ def TOP_3D(
         if pts2d[cam1] is None or pts2d[cam2] is None:
             continue
 
-        # If your TOP_2D can return score None/0, you might want to guard here
         s1 = float(scr2d[cam1]) if scr2d[cam1] is not None else 0.0
         s2 = float(scr2d[cam2]) if scr2d[cam2] is not None else 0.0
         scr_pair = float(np.sqrt(max(s1, 0.0) * max(s2, 0.0)))
@@ -164,14 +171,13 @@ def TOP_3D(
         if X_hom.shape[0] != 4 or X_hom[3, 0] == 0:
             continue
 
-        X_hom /= X_hom[3, 0]  # normalize
+        X_hom /= X_hom[3, 0]
 
         pt3d = toleround(
             [float(X_hom[0, 0]), float(X_hom[1, 0]), float(X_hom[2, 0])],
             phys_cfg["tolerance"],
         )
 
-        # Distance gating
         if np.linalg.norm(pt3d) > phys_cfg["max_distance"]:
             continue
 
@@ -179,14 +185,13 @@ def TOP_3D(
         pts3d[cam2][cam1] = pt3d
 
     if full_cfg.get("printing", False):
-        print(f"\t3D Results of Frame {frame_index}:")
+        printGrey(f"\t3D Results of Frame {frame_index}:")
 
-    # Flatten raw points in stable order
     raw_points = [None] * n_combs
     for i, (cam1, cam2) in enumerate(pair_list):
         raw_points[i] = pts3d[cam1][cam2]
         if full_cfg.get("printing", False):
-            print(f"\t\tCameras {cam1} & {cam2} : {raw_points[i]}")
+            printGrey(f"\t\tCameras {cam1} & {cam2} : {raw_points[i]}")
 
     merge_method = phys_cfg.get("merge_method", None)
     if not merge_method:
@@ -219,10 +224,8 @@ def main():
     pair_list = list(combinations(range(n_cameras), 2))
     n_combs = len(pair_list)
 
-    # --- Merged trajectory output (list of dicts)
     trajectory: list[dict] = []
 
-    # --- Pair trajectories output (list per pair, each is list of dicts like coordinates.json)
     pair_trajectories = None
     if phys_cfg.get("save_pairs", False):
         pair_paths = phys_cfg.get("pairs_trajectories", [])
@@ -233,36 +236,36 @@ def main():
             )
         pair_trajectories = [[] for _ in range(n_combs)]
 
-    for frame_idx in range(n_frames):
-        with timeit(f"Frame {frame_idx} of {n_frames}"):
-            pred_point, raw_points = TOP_3D(all_frames, frame_idx, full_cfg)
-            t_now = frame_idx / fps
+    # --- Create ONE thread pool for all frames (reused)
+    max_workers = int(phys_cfg.get("top2d_workers", min(32, n_cameras)))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for frame_idx in range(n_frames):
+            with timeit(f"Frame {frame_idx} of {n_frames}"):
+                pred_point, raw_points = TOP_3D(all_frames, frame_idx, full_cfg, executor=executor)
+                t_now = frame_idx / fps
 
-            # Save merged output only if merge_method is enabled
-            if phys_cfg.get("merge_method", None):
-                entry = {"t": t_now, "x": None, "y": None, "z": None}
-                if pred_point is not None:
-                    entry["x"] = float(pred_point[0])
-                    entry["y"] = float(pred_point[1])
-                    entry["z"] = float(pred_point[2])
-                trajectory.append(entry)
+                if phys_cfg.get("merge_method", None):
+                    entry = {"t": t_now, "x": None, "y": None, "z": None}
+                    if pred_point is not None:
+                        entry["x"] = float(pred_point[0])
+                        entry["y"] = float(pred_point[1])
+                        entry["z"] = float(pred_point[2])
+                    trajectory.append(entry)
 
-            # Save each pair in the SAME schema: list of dicts with t,x,y,z (None => null)
-            if pair_trajectories is not None:
-                for i, pt in enumerate(raw_points):
-                    entry = {"t": t_now, "x": None, "y": None, "z": None} # entries' stracture
-                    if pt is not None:
-                        entry["x"] = float(pt[0])
-                        entry["y"] = float(pt[1])
-                        entry["z"] = float(pt[2])
-                    pair_trajectories[i].append(entry)
+                if pair_trajectories is not None:
+                    for i, pt in enumerate(raw_points):
+                        entry = {"t": t_now, "x": None, "y": None, "z": None}
+                        if pt is not None:
+                            entry["x"] = float(pt[0])
+                            entry["y"] = float(pt[1])
+                            entry["z"] = float(pt[2])
+                        pair_trajectories[i].append(entry)
 
     with timeit("Saving output trajectory"):
         with open(out_path, "w") as f:
             json.dump(trajectory, f, indent=4)
 
         if pair_trajectories is not None:
-            # Optional metadata mapping: which index corresponds to which (cam1, cam2)
             meta_path = phys_cfg.get("pairs_meta_path", None)
             if meta_path:
                 meta = [{"pair_index": i, "cam1": int(c1), "cam2": int(c2)}
@@ -277,6 +280,6 @@ def main():
 
     print(f"3D trajectory saved to {out_path}")
 
+
 if __name__ == "__main__":
-        main()
-# TODO: try to make the code parallel! using threads on the different 2D detections of different cameras.
+    main()

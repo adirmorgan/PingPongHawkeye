@@ -83,7 +83,7 @@ class timeit:
 
         return wrapper
 def printGreen(s): print("\033[92m {}\033[00m".format(s))
-def printGrey(s): print("\033[90m {}\033[00m".format(s))
+def printGrey(s): print("\033[37m {}\033[00m".format(s))
 def Contours(frames: np.ndarray, frame_index: int, cfg: dict) -> List[Tuple[np.ndarray, int]]:
     """
     Return all contours in the given frame after masking via your shape thresholds.

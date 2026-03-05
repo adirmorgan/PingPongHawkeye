@@ -1,6 +1,6 @@
 {
   "mp4_to_npy": {
-    "input_video": "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\camera1.mp4",
+    "input_video": "C:\\Users\\itays\\Downloads\\camera1.mp4",
     "output_npy": "C:\\Users\\itays\\Downloads\\camera1.npy",
     "grayscale": false,
     "resize": [1280, 1024]

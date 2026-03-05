@@ -83,16 +83,6 @@ def Shape_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, c
     """
     frame = frames[frame_index]
 
-    # Area filter
-    area = cv2.contourArea(contour)
-    min_a = float(cfg.get("min_area", 0.0))
-    max_a = float(cfg.get("max_area", float("inf")))
-    if area < min_a or area > max_a:
-        return 0.0
-
-    if len(contour) < 5:
-        return 0.0
-
     # Fit ellipse
     ellipse = cv2.fitEllipse(contour)
     (cx, cy), (major, minor), angle = ellipse
@@ -192,8 +182,10 @@ def main():
         mask = preprocess_mask(frame, cfg)
 
         # 2) Extract contours
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
+        '''OPTION #1'''
+        #contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        '''OPTION #2'''
+        contours = Contours(frames, idx, full_cfg)
         # 3) Evaluate and draw all contours above min_score
         for cnt in contours:
             score = Shape_Detection(frames, idx, cnt, cfg)

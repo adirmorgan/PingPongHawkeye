@@ -236,7 +236,7 @@ def Contours(frames: np.ndarray, frame_index: int, cfg: dict) -> List[Tuple[np.n
     Args:
       frames (np.ndarray): video frames array.
       frame_index (int): index of the current frame.
-      cfg (dict): shape_detection config section (color_space, thresholds, lab settings, etc.)
+      cfg (dict): full config dict.
 
     Returns:
       List of contours
@@ -248,17 +248,29 @@ def Contours(frames: np.ndarray, frame_index: int, cfg: dict) -> List[Tuple[np.n
                                   shadow_weight=cfg.get('shadow_weight', 0.3))
 
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            return contours
         case "shape":
             mask = shape_mask(frame, cfg)
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            return contours
         case "color":
             mask = color_mask(frame, cfg)
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            return contours
         case _:
             raise ValueError(f"Invalid mask method: {cfg['contours']['mask_method']}")
+    # Area filter
+    raw_contours = contours
+    contours = []
+    for cnt in raw_contours:
+        area = cv2.contourArea(cnt)
+        min_a = float(cfg['contours'].get("min_area", 0.0))
+        max_a = float(cfg['contours'].get("max_area", float("inf")))
+        if area < min_a or area > max_a:
+            #remove this contour
+            continue
+
+        if len(cnt) < 5:
+            continue
+        contours.append(cnt)
+    return contours
 
 def get_coordinates(contour):
     """

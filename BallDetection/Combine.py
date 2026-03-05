@@ -37,7 +37,7 @@ def combine_scores(strategy: str,
             s = max(s_score, 1e-8)
             c = max(c_score, 1e-8)
             m = max(m_score, 1e-8)
-            return (s ** s_w * c ** c_w * m ** m_w) ** (1.0 / total_w)
+            return ((s ** s_w) * (c ** c_w) * (m ** m_w)) ** (1.0 / total_w)
         case "minimize":
             return min(s_score, c_score, m_score)
         case "diminish":  # weighted harmonic mean

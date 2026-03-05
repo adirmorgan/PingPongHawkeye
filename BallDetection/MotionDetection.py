@@ -167,7 +167,7 @@ def main():
     if cfg is None:
         raise ValueError("missing 'motion_detection' configuration")\
 
-    timing (['timing'])
+    timing (cfg.get('timing'))
     frames = np.load(cfg['video_npy'])
     window = cfg.get('motion_window', 'Motion Detection')
     delay = int(cfg.get('display_fps_delay', 30))
@@ -177,10 +177,14 @@ def main():
     while(flow.loop_cond()):
         idx = flow.get_frame_index()
         frame = frames[idx]
+
         mask = (compute_kstep_motion(frames, idx, cfg.get('motion_k',5), cfg.get('motion_threshold',25.0), shadow_weight=cfg.get('shadow_weight',0.3))[0]
                 if cfg.get('method','kstep')=='kstep'
                 else None)  # background mask can be computed similarly
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        '''OPTION #1  : use mask's binary map to find contours'''
+        #contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        '''OPTION #2  : use default contour detections method (using the method stated in the config)'''
+        contours = Contours(frames, idx, full_cfg)
         display = frame.copy()
         for cnt in contours:
             x,y,w,h = cv2.boundingRect(cnt)

@@ -49,7 +49,6 @@ def merge_predictions(method, pts3d, scr3d, nc: int):
     pair_list = list(combinations(range(nc), 2))
     pts3d_flat = [pts3d[c1][c2] for (c1, c2) in pair_list]
     scr3d_flat = [scr3d[c1][c2] for (c1, c2) in pair_list]
-
     if nc == 2:
         return pts3d[0][1]
 

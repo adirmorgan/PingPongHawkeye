@@ -130,29 +130,12 @@ def Motion_Detection(frames: np.ndarray,
             if ys.size == 0:
                 return 0.0
 
-            # Contour centroid
-            moments = cv2.moments(contour)
-            if moments.get("m00", 0) == 0:
-                return 0.0
-            cx = moments["m10"] / moments["m00"]
-            cy = moments["m01"] / moments["m00"]
-
-            # Proximity weighting
-            sigma = float(cfg.get("proximity_sigma", 10.0))
-            d2 = (xs - cx) ** 2 + (ys - cy) ** 2
-            weights = np.exp(-d2 / (2.0 * sigma ** 2))
-            weights /= weights.sum() #  Normalize weights
-
             # Sample continuous motion strength inside contour
             mvals = motion_strength[ys, xs]  # already in [0,1]
-            mvals = np.clip(2*mvals, 0, 1)
+            mvals = np.clip(5*mvals, 0, 1)
             #approximately half of the color diff would be outside of the contour... only inward diff is accounted- but there is the back
 
-            # Weighted average motion score
-            weighted_sum = np.sum(weights * mvals)
-            weight_total = np.sum(weights)
-
-            return float(weighted_sum / weight_total) if weight_total > 0 else 0.0
+            return float(np.mean(mvals))
 
 def main():
     parser = argparse.ArgumentParser(description="Motion detection with proximity-weighted scoring")
@@ -190,10 +173,10 @@ def main():
             x,y,w,h = cv2.boundingRect(cnt)
             score = Motion_Detection(frames, idx, cnt, cfg)
             cv2.rectangle(display, (x,y), (x+w,y+h), (255,0,0),2)
-            cv2.putText(display, f"{score:.2f}", (x,y-5), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255),1)
+            cv2.putText(display, f"{score:.2f}", (x,y-5), cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,0,255),2)
         # Display the results, including the GUI's info.
         info_text = flow.info_text() # GUI's playback speed, pause flag and backward flag
-        cv2.putText(display, info_text, (10,20), cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,255,0),1)
+        cv2.putText(display, info_text, (10,20), cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,255,0),1)
         cv2.imshow(window, display)
         cv2.imshow('Mask', mask)
 

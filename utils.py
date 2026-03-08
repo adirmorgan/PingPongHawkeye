@@ -256,19 +256,30 @@ def Contours(frames: np.ndarray, frame_index: int, cfg: dict) -> List[Tuple[np.n
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         case _:
             raise ValueError(f"Invalid mask method: {cfg['contours']['mask_method']}")
-    # Area filter
+
+    # Filter Contours
+    min_area = float(cfg['contours'].get("min_area", 0.0))
+    max_area = float(cfg['contours'].get("max_area", float("inf")))
+    x_min, y_min = cfg['contours']['roi_bounds'][0]
+    x_max, y_max = cfg['contours']['roi_bounds'][1]
+
     raw_contours = contours
     contours = []
     for cnt in raw_contours:
+        # Check Area
         area = cv2.contourArea(cnt)
-        min_a = float(cfg['contours'].get("min_area", 0.0))
-        max_a = float(cfg['contours'].get("max_area", float("inf")))
-        if area < min_a or area > max_a:
-            #remove this contour
-            continue
+        if area < min_area or area > max_area:
+            continue # filter this contour
 
+        # Check Perimeter
         if len(cnt) < 5:
             continue
+
+        # Check Position (within range of interest)
+        x, y = get_coordinates(cnt)
+        if not (x_min <= x <= x_max and y_min <= y <= y_max):
+            continue
+
         contours.append(cnt)
     return contours
 
@@ -710,3 +721,8 @@ class video_flow_controller:
         info_text += f" | BACK" if self.back_flag else ""
         info_text += f" | PAUSE" if self.pause_flag else ""
         return info_text
+
+def lerp(lowest, best, highest, x): # linear interpolation _/\_
+    if lowest<=x<best: return (x-lowest)/(best-lowest)
+    if best<x<=highest: return 1- (x-best)/(highest-best)
+    else: return 0

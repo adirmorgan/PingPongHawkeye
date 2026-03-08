@@ -182,9 +182,6 @@ def main():
         mask = preprocess_mask(frame, cfg)
 
         # 2) Extract contours
-        '''OPTION #1'''
-        #contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        '''OPTION #2'''
         contours = Contours(frames, idx, full_cfg)
         # 3) Evaluate and draw all contours above min_score
         for cnt in contours:

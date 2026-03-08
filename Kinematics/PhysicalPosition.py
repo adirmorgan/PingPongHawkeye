@@ -190,8 +190,19 @@ def TOP_3D(
             phys_cfg["tolerance"],
         )
 
-        if np.linalg.norm(pt3d) > phys_cfg["max_distance"]:
-            continue
+        if(phys_cfg["check_bounds"]): # Check if inside of physical boundries (range of interest)
+            out_flag = False
+            for dim in range(3):
+                if pt3d[dim]<phys_cfg["bounds"][0][dim]:
+                    print(pt3d[dim], phys_cfg["bounds"][0][dim])
+                    out_flag = True
+                    break
+                if pt3d[dim]>phys_cfg["bounds"][1][dim]:
+                    print(pt3d[dim], phys_cfg["bounds"][1][dim])
+                    out_flag = True
+                    break
+            if out_flag: # Failed - outside of bounds...
+                continue # pts3d[cam1][cam2] = pts3d[cam2]cam1] = None
 
         pts3d[cam1][cam2] = pt3d
         pts3d[cam2][cam1] = pt3d

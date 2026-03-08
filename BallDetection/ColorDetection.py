@@ -9,23 +9,39 @@ from utils import *
 def Color_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, cfg: dict) -> float:
     """
     Compute a color score for the entire surface inside the contour.
-    Score is normalized mean V-channel brightness (0.0 to 1.0).
     The calculation considers the full region enclosed by the contour.
-    cfg keys:
-      "min_v_brightness": int
     """
     frame = frames[frame_index]
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    v = hsv[:, :, 2]
-    mask = np.zeros_like(v, dtype=np.uint8)
-    cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)  # Fill the entire contour area for accurate scoring
-    vals = v[mask == 255]  # Brightness values from the full surface enclosed by the contour
-    if vals.size == 0:
-        return 0.0
-    mean_v = float(np.mean(vals))
-    if mean_v < cfg.get('min_v_brightness', 0):
-        return 0.0
-    return mean_v / 255.0
+
+    # Create a mask for the contour
+    mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+    cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)
+
+    # Compute mean HSV inside the contour
+    mean_hsv = cv2.mean(hsv, mask=mask)[:3]  # (H, S, V)
+
+    best = cfg["ideal_hsv"]
+    lower = cfg["lower_hsv"]
+    upper = cfg["upper_hsv"]
+
+    if best == []:
+        best = [np.mean([lower[i], upper[i]]) for i in range(3)]
+
+    # Score each HSV channel
+    scores = np.array([
+        lerp(lower[i], best[i], upper[i], mean_hsv[i])
+        for i in range(3)
+    ], dtype=float)
+
+    weights = cfg.get("weights")
+    if weights is None:
+        weights = [1, 1, 1]
+
+    weights = np.array(weights, dtype=float)
+    score = float(np.sum(scores * weights) / np.sum(weights))
+
+    return score
 
 
 def detect_ball_contours(frame: np.ndarray, cfg: dict):
@@ -42,19 +58,9 @@ def detect_ball_contours(frame: np.ndarray, cfg: dict):
 
     # 3) find and filter contours by size & ROI
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    x_min, x_max, y_min, y_max = cfg['roi_bounds']
-    min_s, max_s = cfg['min_size'], cfg['max_size']
 
-    valid = []
-    for cnt in contours:
-        x,y,w,h = cv2.boundingRect(cnt)
-        if not (x_min <= x <= x_max and y_min <= y <= y_max):
-            continue
-        if not (min_s <= w <= max_s and min_s <= h <= max_s):
-            continue
-        valid.append(cnt)
 
-    return valid, mask
+    return contours, mask
 
 def main():
     parser = argparse.ArgumentParser(
@@ -94,7 +100,7 @@ def main():
             x, y, w, h = cv2.boundingRect(cnt)
             score = Color_Detection(frames, idx, cnt, cfg)
             cv2.rectangle(display, (x, y), (x + w, y + h), (0, 0, 255), 2)
-            cv2.putText(display, f"{score:.2f}", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+            cv2.putText(display, f"{score:.2f}", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
         # display the GUI's info
         info_text = flow.info_text()
         cv2.putText(display, info_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)

@@ -11,9 +11,9 @@
     "max_area": 600
   },
   "combine": {
-    "npy_file": "C:\\Users\\itays\\Downloads\\elad_phone.npy",
+    "npy_file": "C:\\Users\\itays\\Downloads\\itay_phone.npy",
     "print": true,
-    "min_score": 0.6,
+    "min_score": 0.60,
     "strategy": "filter",
     "shape_weight": 0.85,
     "color_weight": 0.15,

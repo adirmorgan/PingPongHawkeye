@@ -12,7 +12,7 @@
     "max_area": 600
   },
   "combine": {
-    "npy_file": "C:\\Users\\itays\\Downloads\\elad_phone.npy",
+    "npy_file": "C:\\Users\\itays\\Downloads\\itay_phone.npy",
     "print": true,
     "min_score": 0.5,
     "strategy": "filter",
@@ -75,7 +75,8 @@
     "tolerance" : 1e-4,
     "merge_method" : "select 0 1",
     "check_bounds" : false,
-    "bounds" : [[-3000,-3000,-3000], [3000,3000,3000]]
+    "bounds" : [[-3000,-3000,-3000], [3000,3000,3000]],
+    "max_speed": 10000
   },
   "timing": true,
   "printing": true,

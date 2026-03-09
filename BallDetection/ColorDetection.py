@@ -30,7 +30,7 @@ def Color_Detection(frames: np.ndarray, frame_index: int, contour: np.ndarray, c
 
     # Score each HSV channel
     scores = np.array([
-        lerp(lower[i], best[i], upper[i], mean_hsv[i])
+        utils.piecewise_linear_scoring(lower[i], best[i], upper[i], mean_hsv[i])
         for i in range(3)
     ], dtype=float)
 

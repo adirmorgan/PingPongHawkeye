@@ -1,7 +1,7 @@
 import argparse
 import concurrent.futures
 from itertools import combinations
-
+from utils import spoof_filter
 import json
 import numpy as np
 import cv2
@@ -221,6 +221,7 @@ def TOP_3D(
         return None, raw_points
 
     merged = merge_predictions(merge_method, pts3d, scr3d, n_cameras)
+
     return merged, raw_points
 
 timing(True)
@@ -278,6 +279,7 @@ def main():
 
     with timeit("Computing 3D trajectory"):
         try:
+            prev = None # previous point is always remembered in order to track spoofing
             for frame_idx in range(n_frames):
                 with timeit(f"Frame {frame_idx} of {n_frames}"):
                     pred_point, raw_points = TOP_3D(
@@ -288,6 +290,8 @@ def main():
                         contour_executor=contour_executor,
                         method_executor=method_executor,
                     )
+                    pred_point = spoof_filter(pred_point, prev, 1/fps, phys_cfg["max_speed"])
+                    prev = pred_point  # update for the next iteration
                     t_now = frame_idx / fps
 
                     if phys_cfg.get("merge_method", None):

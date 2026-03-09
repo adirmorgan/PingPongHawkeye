@@ -722,7 +722,7 @@ class video_flow_controller:
         info_text += f" | PAUSE" if self.pause_flag else ""
         return info_text
 
-def piecewise_linear_scorin(min, best, max, x): # linear interpolation _/\_
+def piecewise_linear_scoring(min, best, max, x): # linear interpolation _/\_
     if min<=x<best: return (x-min)/(best-min)
     if best<=x<max: return (max-x)/(max-best)
     else: return 0

@@ -188,11 +188,11 @@ def main():
             score = Shape_Detection(frames, idx, cnt, cfg)
             if score >= min_score:
                 x, y, w, h = cv2.boundingRect(cnt)
-                cv2.rectangle(display, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                cv2.rectangle(display, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
                 if draw_ellipse and len(cnt) >= 5:
                     ellipse = cv2.fitEllipse(cnt)
-                    cv2.ellipse(display, ellipse, (255, 0, 0), 2)
+                    cv2.ellipse(display, ellipse, (0, 0, 255), 2)
 
                 cv2.putText(
                     display,

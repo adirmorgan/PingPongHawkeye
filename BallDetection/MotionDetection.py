@@ -172,8 +172,8 @@ def main():
         for cnt in contours:
             x,y,w,h = cv2.boundingRect(cnt)
             score = Motion_Detection(frames, idx, cnt, cfg)
-            cv2.rectangle(display, (x,y), (x+w,y+h), (255,0,0),2)
-            cv2.putText(display, f"{score:.2f}", (x,y-5), cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,0,255),2)
+            cv2.rectangle(display, (x,y), (x+w,y+h), (0,255,0),2)
+            cv2.putText(display, f"{score:.2f}", (x,y-5), cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,255,0),2)
         # Display the results, including the GUI's info.
         info_text = flow.info_text() # GUI's playback speed, pause flag and backward flag
         cv2.putText(display, info_text, (10,20), cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,255,0),1)

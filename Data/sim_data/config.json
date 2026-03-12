@@ -27,7 +27,7 @@
     "background_threshold": 30,
     "display_fps_delay": 30,
     "motion_window": "Motion Detection",
-    "channel_weights": [2, 1, 1],
+    "channel_weights": [1, 1, 1],
     "method": "kstep",
     "motion_k": 1,
     "motion_threshold": 20,
@@ -38,7 +38,7 @@
     "lower_hsv": [7, 100, 100],
     "upper_hsv": [20, 200, 200],
     "ideal_hsv": [],
-    "weights": [1,1,1],
+    "weights": [2,1,1],
     "display_fps_delay": 30,
     "color_window": "Color Detection"
   },

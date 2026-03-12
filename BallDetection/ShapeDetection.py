@@ -200,7 +200,7 @@ def main():
                     f"{score:.2f}",
                     (x, max(y - 5, 0)),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
+                    0.8,
                     (0,255,0),
                     2,
                     cv2.LINE_AA,

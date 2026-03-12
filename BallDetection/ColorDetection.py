@@ -100,8 +100,8 @@ def main():
             x, y, w, h = cv2.boundingRect(cnt)
             score = Color_Detection(frames, idx, cnt, cfg)
             cv2.rectangle(display, (x, y), (x + w, y + h), (0, 0, 255), 2)
-            cv2.putText(display, f"{score:.2f}", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-        # display the GUI's info
+            cv2.putText(display, f"{score:.2f}", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        # display the GUI's infoq
         info_text = flow.info_text()
         cv2.putText(display, info_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
         # Show both the detection window and the mask window (from which the candidate contours were extracted)

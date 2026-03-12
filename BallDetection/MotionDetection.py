@@ -176,7 +176,7 @@ def main():
             cv2.putText(display, f"{score:.2f}", (x,y-5), cv2.FONT_HERSHEY_SIMPLEX,0.6,(255,0,0),2)
         # Display the results, including the GUI's info.
         info_text = flow.info_text() # GUI's playback speed, pause flag and backward flag
-        cv2.putText(display, info_text, (10,20), cv2.FONT_HERSHEY_SIMPLEX,0.6,(255,0,0),1)
+        cv2.putText(display, info_text, (10,20), cv2.FONT_HERSHEY_SIMPLEX,0.8,(255,0,0),1)
         cv2.imshow(window, display)
         cv2.imshow('Mask', mask)
 

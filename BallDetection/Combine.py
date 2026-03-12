@@ -253,9 +253,9 @@ def main():
                     text,
                     (x, max(y - 5, 0)),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (0, 255, 0),
                     1,
+                    (0, 255, 0),
+                    2,
                     cv2.LINE_AA,
                 )
             # Display speed, backward_flag, and paused_flag frome the video flow controller

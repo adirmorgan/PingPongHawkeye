@@ -207,7 +207,7 @@ def main():
                 )
         # 4) display GUI info
             info_text = flow.info_text()
-            cv2.putText(display, info_text, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 1, cv2.LINE_AA)
+            cv2.putText(display, info_text, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2, cv2.LINE_AA)
         # 5) Show windows
         cv2.imshow(window_name, display)
         cv2.imshow(mask_window_name, mask)

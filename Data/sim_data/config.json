@@ -9,10 +9,10 @@
     "mask_method": "color",
     "roi_bounds":  [[10, 0],[1080, 1920]],
     "min_area": 0,
-    "max_area": 300
+    "max_area": 600
   },
   "combine": {
-    "npy_file": "C:\\Users\\itays\\Downloads\\pingpong.npy",
+    "npy_file": "C:\\Users\\itays\\Downloads\\camera1.npy",
     "print": true,
     "min_score": 0.01,
     "strategy": "filter",
@@ -22,7 +22,7 @@
     "show_components" : true
   },
   "motion_detection": {
-    "video_npy": "C:\\Users\\itays\\Downloads\\pingpong.npy",
+    "video_npy": "C:\\Users\\itays\\Downloads\\camera1.npy",
     "background_learning_rate": 0.01,
     "background_threshold": 30,
     "display_fps_delay": 60,
@@ -34,7 +34,7 @@
     "shadow_weight": 0.1
   },
   "color_detection": {
-    "video_npy": "C:\\Users\\itays\\Downloads\\pingpong.npy",
+    "video_npy": "C:\\Users\\itays\\Downloads\\camera1.npy",
     "lower_hsv": [140, 100, 100],
     "upper_hsv": [170, 255, 255],
     "ideal_hsv": [],
@@ -43,14 +43,14 @@
     "color_window": "Color Detection"
   },
   "shape_detection": {
-    "video_npy": "C:\\Users\\itays\\Downloads\\pingpong.npy",
+    "video_npy": "C:\\Users\\itays\\Downloads\\camera1.npy",
     "lab_thresh": null,
     "thresh": 0.4,
     "display_fps_delay": 60,
     "shape_window": "Shape Detection"
   },
   "show": {
-    "video_npy": ["C:\\Users\\itays\\Downloads\\pingpong.npy"],
+    "video_npy": ["C:\\Users\\itays\\Downloads\\camera1.npy"],
     "import_coords": [
                           "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates01.json",
                           "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates02.json",

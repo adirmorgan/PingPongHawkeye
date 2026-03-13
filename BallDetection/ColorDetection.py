@@ -99,8 +99,8 @@ def main():
         for cnt in contours:
             x, y, w, h = cv2.boundingRect(cnt)
             score = Color_Detection(frames, idx, cnt, cfg)
-            cv2.rectangle(display, (x, y), (x + w, y + h), (0, 0, 255), 2)
-            cv2.putText(display, f"{score:.2f}", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+            cv2.rectangle(display, (x, y), (x + w, y + h), (0, 0, 255), 1)
+            cv2.putText(display, f"{score:.2f}", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 0, 255), 1)
         # display the GUI's infoq
         info_text = flow.info_text()
         cv2.putText(display, info_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)

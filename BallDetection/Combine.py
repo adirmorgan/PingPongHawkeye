@@ -244,7 +244,7 @@ def main():
                     best_contour = best_contour.astype(np.float32)
 
                 x, y, w, h = cv2.boundingRect(best_contour)
-                cv2.drawContours(display, [best_contour], -1, (90, 90, 90), 1 )
+                cv2.drawContours(display, [best_contour], -1, (255, 255, 255), 2 )
 
                 text = (f"{combined_score:.2f} S:{s:.2f} C:{c:.2f} M:{m:.2f}"
                         if show_components else f"{combined_score:.2f}")
@@ -253,10 +253,10 @@ def main():
                     text,
                     (x, max(y - 5, 0)),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    (90, 90, 90),
-                    1,
-                    cv2.LINE_AA,
+                    0.8,
+                    (255, 255, 255),
+                    2,
+                    cv2.LINE_AA
                 )
             # Display speed, backward_flag, and paused_flag frome the video flow controller
             info_text = flow.info_text() # using flow's __str__ mehtod
@@ -267,7 +267,7 @@ def main():
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.5,
                 (255, 255, 255),
-                1,
+                2    ,
                 cv2.LINE_AA,
             )
             cv2.imshow(window_name, display)

@@ -189,25 +189,25 @@ def main():
             if score >= min_score:
                 x, y, w, h = cv2.boundingRect(cnt)
                 if not draw_ellipse:
-                    cv2.rectangle(display, (x, y), (x + w, y + h), (0,255,0), 2)
+                    cv2.rectangle(display, (x, y), (x + w, y + h), (0,255,0), 1)
 
                 if draw_ellipse and len(cnt) >= 5:
                     ellipse = cv2.fitEllipse(cnt)
-                    cv2.ellipse(display, ellipse, (0,255,0), 2)
+                    cv2.ellipse(display, ellipse, (0,255,0), 1)
 
                 cv2.putText(
                     display,
                     f"{score:.2f}",
                     (x, max(y - 5, 0)),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.8,
+                    1,
                     (0,255,0),
-                    2,
+                    1,
                     cv2.LINE_AA,
                 )
         # 4) display GUI info
             info_text = flow.info_text()
-            cv2.putText(display, info_text, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2, cv2.LINE_AA)
+            cv2.putText(display, info_text, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 1, cv2.LINE_AA)
         # 5) Show windows
         cv2.imshow(window_name, display)
         cv2.imshow(mask_window_name, mask)

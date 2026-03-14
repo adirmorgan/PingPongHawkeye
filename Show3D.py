@@ -15,15 +15,18 @@ def plot_trajectory(coords,  export_path):
     fig, axes = plt.subplots(3, 1, figsize=(8, 12), sharex=True)
     axes[0].plot(t, x)
     axes[0].set_ylabel('X')
+    axes[0].grid(True)
     axes[0].set_title('X vs Time')
 
     axes[1].plot(t, y)
     axes[1].set_ylabel('Y')
+    axes[1].grid(True)
     axes[1].set_title('Y vs Time')
 
     axes[2].plot(t, z)
     axes[2].set_xlabel('Time')
     axes[2].set_ylabel('Z')
+    axes[2].grid(True)
     axes[2].set_title('Z vs Time')
 
     plt.tight_layout()

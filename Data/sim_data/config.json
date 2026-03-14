@@ -1,101 +1,84 @@
 {
   "mp4_to_npy": {
-    "input_video": "C:\\Users\\itays\\Downloads\\camera1.mp4",
-    "output_npy": "C:\\Users\\itays\\Downloads\\camera1.npy",
+    "input_video": "C:\\Users\\itays\\Downloads\\itay_phone_trim.mp4",
+    "output_npy": "C:\\Users\\itays\\Downloads\\itay_phone.npy",
     "grayscale": false,
-    "resize": [1280, 1024]
+    "resize": [1080, 1920]
   },
   "contours": {
     "mask_method": "color",
     "roi_bounds":  [[10, 0],[1080, 1920]],
-    "min_area": 0,
+    "min_area": 20,
     "max_area": 600
   },
   "combine": {
-    "npy_file": "C:\\Users\\itays\\Downloads\\camera1.npy",
+    "npy_file": "C:\\Users\\itays\\Downloads\\itay_phone.npy",
     "print": true,
-    "min_score": 0.01,
+    "min_score": 0.5,
     "strategy": "filter",
-    "shape_weight": 0.1,
+    "shape_weight": 0.8,
     "color_weight": 0.1,
-    "motion_weight": 0.8,
+    "motion_weight": 0.1,
     "show_components" : true
   },
   "motion_detection": {
-    "video_npy": "C:\\Users\\itays\\Downloads\\camera1.npy",
+    "video_npy": "C:\\Users\\itays\\Downloads\\itay_phone.npy",
     "background_learning_rate": 0.01,
     "background_threshold": 30,
-    "display_fps_delay": 60,
+    "display_fps_delay": 30,
     "motion_window": "Motion Detection",
     "channel_weights": [1, 1, 1],
     "method": "kstep",
-    "motion_k": 5,
+    "motion_k": 1,
     "motion_threshold": 20,
     "shadow_weight": 0.1
   },
   "color_detection": {
-    "video_npy": "C:\\Users\\itays\\Downloads\\camera1.npy",
-    "lower_hsv": [140, 100, 100],
-    "upper_hsv": [170, 255, 255],
+    "video_npy": "C:\\Users\\itays\\Downloads\\itay_phone.npy",
+    "lower_hsv": [7, 100, 100],
+    "upper_hsv": [20, 200, 200],
     "ideal_hsv": [],
     "weights": [2,1,1],
-    "display_fps_delay": 60,
+    "display_fps_delay": 30,
     "color_window": "Color Detection"
   },
   "shape_detection": {
-    "video_npy": "C:\\Users\\itays\\Downloads\\camera1.npy",
+    "video_npy": "C:\\Users\\itays\\Downloads\\itay_phone.npy",
     "lab_thresh": null,
-    "thresh": 0.4,
-    "display_fps_delay": 60,
+    "thresh": 0.5,
+    "display_fps_delay": 30,
     "shape_window": "Shape Detection"
   },
   "show": {
-    "video_npy": ["C:\\Users\\itays\\Downloads\\camera1.npy"],
+    "video_npy": ["C:\\Users\\itays\\Downloads\\pingpong.npy"],
     "import_coords": [
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates01.json",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates02.json",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates03.json",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates12.json",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates13.json",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates23.json"
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates_exp.json"
     ],
     "export_plots":[
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\trajectory01.png",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\trajectory02.png",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\trajectory03.png",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\trajectory12.png",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\trajectory13.png",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\trajectory23.png"
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\trajectory_exp.png"
     ],
-    "display_fps_delay": 60,
+    "display_fps_delay": 30,
     "show_window": "Tracking"
   },
   "PhysicalPosition": {
     "npy_files": [
-      "C:\\Users\\itays\\Downloads\\camera1.npy",
-      "C:\\Users\\itays\\Downloads\\camera2.npy",
-      "C:\\Users\\itays\\Downloads\\camera3.npy",
-      "C:\\Users\\itays\\Downloads\\camera4.npy"
+      "C:\\Users\\itays\\Downloads\\elad_phone.npy",
+      "C:\\Users\\itays\\Downloads\\itay_phone.npy"
     ],
-    "cameras_file": "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\cameras.json",
-    "frame_rate": 60,
-    "output_trajectory": "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates.json",
+    "cameras_file": "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\cameras_exp.json",
+    "frame_rate": 30,
+    "output_trajectory": "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates_exp.json",
     "pairs_trajectories": [
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates01.json",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates02.json",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates03.json",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates12.json",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates13.json",
-                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates23.json"
+                          "C:\\Users\\itays\\PythonProjects\\PingPongHawkeye\\Data\\sim_data\\coordinates_exp.json"
                           ],
-    "save_pairs": true,
+    "save_pairs": false,
     "tolerance" : 1e-4,
-    "merge_method" : "weighted",
+    "merge_method" : "select 0 1",
     "check_bounds" : false,
     "bounds" : [[-3000,-3000,-3000], [3000,3000,3000]],
-    "max_speed": 10000
+    "max_speed": 900
   },
   "timing": true,
-  "printing": false,
-  "multithreading": true
+  "printing": true,
+  "threading": true
 }

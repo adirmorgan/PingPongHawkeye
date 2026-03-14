@@ -237,6 +237,7 @@ def main():
         full_cfg = json.load(open(args.config, "r"))
         phys_cfg = full_cfg["PhysicalPosition"]
         timing(full_cfg["timing"])
+        threading(full_cfg["threading"])
 
         npy_files = phys_cfg["npy_files"]
         fps = phys_cfg["frame_rate"]

@@ -90,7 +90,7 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 # Global toggle for threadit
-THREADING_ENABLE: bool = True
+THREADING_ENABLE: bool = False
 
 
 def threading(enable: bool) -> None:

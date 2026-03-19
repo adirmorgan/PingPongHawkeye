@@ -197,7 +197,7 @@ def main():
     combine_cfg = full_cfg["combine"]
 
     timing(full_cfg.get("timing", False))
-    threading(full_cfg(["threading"], False))
+    threading(full_cfg.get("threading", False))
 
     npy_path = combine_cfg["npy_file"]
     frames = np.load(npy_path)

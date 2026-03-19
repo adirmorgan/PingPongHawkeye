@@ -83,13 +83,12 @@ def combine_4_videos_into_one_elad(
 
     print(f"סיום בהצלחה. קובץ הפלט נשמר ב- {output_path}")
 
-from HSV_Treshhold_check import HueSegmentationTool
 if __name__ == '__main__':
     video_paths = [
-        'C:\\Users\\elad2\\Downloads\\vidvid.mp4',
-        'C:\\Users\\elad2\\Downloads\\vidvid.mp4',
-        'C:\\Users\\elad2\\Downloads\\vidvid.mp4',
-        'C:\\Users\\elad2\\Downloads\\vidvid.mp4'
+        'C:\\Users\\itays\\Downloads\\camera1.mp4',
+        'C:\\Users\\itays\\Downloads\\camera2.mp4',
+        'C:\\Users\\itays\\Downloads\\camera3.mp4',
+        'C:\\Users\\itays\\Downloads\\camera4.mp4'
     ]
-    output_filename = 'C:\\Users\\elad2\\Downloads\\combined_video_2.mp4'
+    output_filename = 'C:\\Users\\itays\\Downloads\\combined_video_sim.mp4'
     combine_4_videos_into_one_elad(video_paths, output_filename, show_live=True)

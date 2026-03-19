@@ -76,7 +76,7 @@
     "merge_method" : "select 0 1",
     "check_bounds" : false,
     "bounds" : [[-3000,-3000,-3000], [3000,3000,3000]],
-    "max_speed": 900
+    "max_speed": 10000
   },
   "timing": true,
   "printing": true,
